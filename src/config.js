@@ -1,0 +1,76 @@
+export const URLS = {
+  home: "https://www.fibernet.uz/language/uz/uz/",
+  tariffs: "https://www.fibernet.uz/language/uz/tariflar/",
+  tezkor: "https://www.fibernet.uz/language/uz/tariflar/7945-2/",
+  online: "https://www.fibernet.uz/language/uz/tariflar/online-new/",
+  faq: "https://www.fibernet.uz/language/uz/savol-va-javoblar/",
+  settings: "https://www.fibernet.uz/language/uz/sozlamalar/",
+  speed: "https://www.fibernet.uz/language/uz/tezlik-sinovi/",
+  services: "https://www.fibernet.uz/language/uz/dop_uslugi_uz/",
+  connect: "https://www.fibernet.uz/language/uz/meni-ulang-2/",
+  contactsUz: "https://www.fibernet.uz/language/uz/aloqa-uchun/",
+  contactsRu: "https://www.fibernet.uz/contacts/",
+  cabinet: "https://cabinet.fibernet.uz/"
+};
+
+export const CONTACTS = {
+  phone: "+998 71 200-47-47",
+  infoEmail: "info@fibernet.uz",
+  supportEmail: "support@fibernet.uz",
+  financeEmail: "office@fibernet.uz",
+  addressUz: "Toshkent sh., Aviasozlar ko‘chasi, 1-tor ko‘cha, 22-uy",
+  addressRu: "г. Ташкент, 1-й проезд Авиасозлар, дом 22"
+};
+
+export const FALLBACK_TARIFFS = {
+  tezkor: [
+    { name: "TEZKOR-100", price: 160000, evening: 100, daytime: 200, tasix: 200, router: "25 000 so‘m/oy", tv: "170" },
+    { name: "TEZKOR-150", price: 180000, evening: 150, daytime: 200, tasix: 200, router: "25 000 so‘m/oy", tv: "170" },
+    { name: "TEZKOR-200", price: 200000, evening: 200, daytime: 200, tasix: 200, router: "25 000 so‘m/oy", tv: "170" },
+    { name: "TEZKOR-300", price: 300000, evening: 300, daytime: 300, tasix: 300, router: "25 000 so‘m/oy", tv: "170" },
+    { name: "TEZKOR-500", price: 500000, evening: 500, daytime: 500, tasix: 500, router: "25 000 so‘m/oy", tv: "170" },
+    { name: "TEZKOR-1000", price: 1000000, evening: 1000, daytime: 1000, tasix: 1000, router: "25 000 so‘m/oy", tv: "170" }
+  ],
+  online: [
+    { name: "OnLine-5", price: 85000, evening: 5, daytime: 100, tasix: 100 },
+    { name: "OnLine-8", price: 95000, evening: 8, daytime: 100, tasix: 100 },
+    { name: "OnLine-20", price: 105000, evening: 20, daytime: 100, tasix: 100 },
+    { name: "OnLine-25", price: 115000, evening: 25, daytime: 100, tasix: 100 },
+    { name: "OnLine-30", price: 125000, evening: 30, daytime: 100, tasix: 100 },
+    { name: "OnLine-40", price: 135000, evening: 40, daytime: 100, tasix: 100 },
+    { name: "OnLine-50", price: 155000, evening: 50, daytime: 100, tasix: 100 },
+    { name: "OnLine-60", price: 165000, evening: 60, daytime: 100, tasix: 100 },
+    { name: "OnLine-80", price: 175000, evening: 80, daytime: 100, tasix: 100 },
+    { name: "OnLine-100", price: 195000, evening: 100, daytime: 100, tasix: 100 }
+  ]
+};
+
+export const POPULAR_SERVICES = [
+  ["Wi‑Fi sozlash", "30 000 so‘m"],
+  ["Kompyuterda tarmoqni sozlash", "30 000 so‘m"],
+  ["LAN sozlash", "30 000 so‘m"],
+  ["Tarmoq uskunasi diagnostikasi", "30 000 so‘m"],
+  ["IPTV sozlash", "25 000 so‘m"],
+  ["TV/pristavka sozlash", "20 000 so‘m"],
+  ["Router yetkazib berish", "30 000 so‘m"],
+  ["Ustani chaqirish", "25 000 so‘m"]
+];
+
+export const DIAGNOSTICS = {
+  uz: {
+    no_internet: `<b>Internet ishlamayapti</b>\n\n1) Shaxsiy kabinetda balansni tekshiring. Salbiy balans internetni bloklashi mumkin.\n2) ONU/modem va routerni 60 soniyaga o‘chirib, qayta yoqing.\n3) Optik qurilmada LOS qizil yonayotgan bo‘lsa, kabelga tegmang — texnik yordam kerak bo‘lishi mumkin.\n4) Ethernet kabeli va routerning WAN indikatorini tekshiring.`,
+    slow: `<b>Internet sekin</b>\n\n1) Tezlikni imkon qadar kabel orqali tekshiring.\n2) Wi‑Fi bo‘lsa, routerga yaqinlashing va 5 GHz tarmoqdan foydalaning.\n3) Fon yuklamalari, Windows Update, torrent va boshqa qurilmalarni vaqtincha to‘xtating.\n4) Router/ONU ni qayta ishga tushiring va testni takrorlang.`,
+    wifi: `<b>Wi‑Fi muammosi</b>\n\n1) Routerni ochiq va balandroq joyga qo‘ying.\n2) 5 GHz — tezroq, 2.4 GHz — uzoqroq masofaga.\n3) Routerni qayta yoqing.\n4) Wi‑Fi parolini begona qurilmalar ulanmasligi uchun yangilang.`,
+    iptv: `<b>IPTV / TV muammosi</b>\n\n1) Avval internet ishlayotganini tekshiring.\n2) Router va TV/pristavkani qayta yoqing.\n3) Ilovani yopib qayta oching.\n4) Muammo faqat bitta kanal yoki barcha kanallarda ekanini aniqlang.`,
+    billing: `<b>To‘lov / shaxsiy kabinet</b>\n\nBalans va tarif holatini shaxsiy kabinetdan tekshiring. Tarifni o‘zgartirish uchun yangi tarif qiymatiga yetarli depozit talab qilinishi mumkin. Bot hech qachon kabinet parolingizni so‘ramaydi.`,
+    other: `<b>Boshqa muammo</b>\n\nOperatorga murojaat yuborish uchun ticket oching. Muammoni aniq yozing: qachondan boshlangan, qaysi qurilmalarda va indikatorlar holati.`
+  },
+  ru: {
+    no_internet: `<b>Нет интернета</b>\n\n1) Проверьте баланс в личном кабинете. Отрицательный баланс может блокировать доступ.\n2) Отключите ONU/модем и роутер на 60 секунд, затем включите.\n3) Если на оптическом терминале красным горит LOS, не трогайте оптоволокно — может потребоваться техническая поддержка.\n4) Проверьте Ethernet-кабель и индикатор WAN на роутере.`,
+    slow: `<b>Низкая скорость</b>\n\n1) По возможности измерьте скорость по кабелю.\n2) По Wi‑Fi подойдите ближе к роутеру и используйте 5 GHz.\n3) Временно остановите фоновые загрузки, Windows Update, торренты и другие устройства.\n4) Перезагрузите роутер/ONU и повторите тест.`,
+    wifi: `<b>Проблема с Wi‑Fi</b>\n\n1) Поставьте роутер выше и на открытом месте.\n2) 5 GHz быстрее, 2.4 GHz лучше работает на расстоянии.\n3) Перезагрузите роутер.\n4) Обновите пароль Wi‑Fi, чтобы исключить посторонние подключения.`,
+    iptv: `<b>Проблема IPTV / ТВ</b>\n\n1) Сначала проверьте, работает ли интернет.\n2) Перезагрузите роутер и ТВ/приставку.\n3) Перезапустите приложение.\n4) Уточните, проблема на одном канале или на всех.`,
+    billing: `<b>Оплата / личный кабинет</b>\n\nПроверьте баланс и тариф в личном кабинете. Для смены тарифа может потребоваться депозит не ниже стоимости нового тарифа. Бот никогда не запрашивает пароль от личного кабинета.`,
+    other: `<b>Другая проблема</b>\n\nСоздайте заявку оператору. Опишите, когда началась проблема, на каких устройствах и какие индикаторы горят.`
+  }
+};
