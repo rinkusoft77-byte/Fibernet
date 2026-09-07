@@ -16,9 +16,9 @@
     }
   ],
   "vars": {
-    "PUBLIC_BASE_URL": "https://REPLACE_WITH_YOUR_WORKER_DOMAIN",
-    "SUPPORT_CHAT_ID": "REPLACE_WITH_TELEGRAM_SUPPORT_CHAT_ID",
-    "ADMIN_IDS": "",
+    "PUBLIC_BASE_URL": "https://fibernet.nigocat8.workers.dev",
+    "SUPPORT_CHAT_ID": "-1003621741530",
+    "ADMIN_IDS": "7294324265",
     "BRAND_NAME": "FiberNet"
   }
 }
