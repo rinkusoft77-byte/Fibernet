@@ -32,6 +32,13 @@ const supportChat = (env,id) => String(id)===String(env.SUPPORT_CHAT_ID);
 const isAdmin = (env,userId,chatId) => supportChat(env,chatId) || String(env.ADMIN_IDS||"").split(",").map(x=>x.trim()).includes(String(userId));
 const categoryLabel = (cat,lang) => ({no_internet:lang==="ru"?"Нет интернета":"Internet yo‘q",slow:lang==="ru"?"Низкая скорость":"Internet sekin",wifi:"Wi‑Fi",iptv:"IPTV / TV",billing:lang==="ru"?"Оплата / кабинет":"To‘lov / kabinet",other:lang==="ru"?"Другая проблема":"Boshqa muammo",connection:lang==="ru"?"Подключение":"Ulanish"}[cat]||cat);
 
+async function secretFingerprint(value){
+  if(!value) return null;
+  const bytes=new TextEncoder().encode(String(value));
+  const digest=await crypto.subtle.digest("SHA-256",bytes);
+  return Array.from(new Uint8Array(digest)).slice(0,6).map(b=>b.toString(16).padStart(2,"0")).join("");
+}
+
 async function showHome(env,chatId,lang,messageId){
   const extra={reply_markup:homeKeyboard(lang)};
   return messageId?editMessage(env,chatId,messageId,t(lang,"welcome"),extra):sendMessage(env,chatId,t(lang,"welcome"),extra);
@@ -102,6 +109,6 @@ async function webhook(request,env){
   if(!await claimUpdate(env,u.update_id))return new Response("ok");try{if(u.callback_query)await callback(env,u.callback_query);else if(u.message)await message(env,u.message);return new Response("ok");}catch(e){console.error(e);await releaseUpdate(env,u.update_id);return new Response("Retry",{status:500});}
 }
 export default {
-  async fetch(request,env){const url=new URL(request.url);if(request.method==="POST"&&url.pathname==="/telegram/webhook")return webhook(request,env);if(request.method==="GET"&&url.pathname==="/health"){try{const s=await getSourceStatus(env);return Response.json({ok:true,service:"fibernet-support-bot",sources:s});}catch(e){return Response.json({ok:false,error:String(e)},{status:503});}}if(request.method==="POST"&&url.pathname==="/admin/sync"){const a=request.headers.get("authorization")||"";if(!env.ADMIN_API_TOKEN||a!==`Bearer ${env.ADMIN_API_TOKEN}`)return new Response("Unauthorized",{status:401});return Response.json({ok:true,report:await syncOfficialSources(env)});}if(url.pathname==="/")return new Response("FiberNet Support Bot is running.");return new Response("Not found",{status:404});},
+  async fetch(request,env){const url=new URL(request.url);if(request.method==="POST"&&url.pathname==="/telegram/webhook")return webhook(request,env);if(request.method==="GET"&&url.pathname==="/debug/env")return Response.json({service:"fibernet",hasWebhookSecret:!!env.TELEGRAM_WEBHOOK_SECRET,webhookSecretLength:String(env.TELEGRAM_WEBHOOK_SECRET||"").length,webhookSecretFingerprint:await secretFingerprint(env.TELEGRAM_WEBHOOK_SECRET),hasBotToken:!!env.TELEGRAM_BOT_TOKEN,hasDb:!!env.DB,publicBaseUrl:env.PUBLIC_BASE_URL||null},{headers:{"cache-control":"no-store"}});if(request.method==="GET"&&url.pathname==="/health"){try{const s=await getSourceStatus(env);return Response.json({ok:true,service:"fibernet-support-bot",sources:s});}catch(e){return Response.json({ok:false,error:String(e)},{status:503});}}if(request.method==="POST"&&url.pathname==="/admin/sync"){const a=request.headers.get("authorization")||"";if(!env.ADMIN_API_TOKEN||a!==`Bearer ${env.ADMIN_API_TOKEN}`)return new Response("Unauthorized",{status:401});return Response.json({ok:true,report:await syncOfficialSources(env)});}if(url.pathname==="/")return new Response("FiberNet Support Bot is running.");return new Response("Not found",{status:404});},
   async scheduled(_c,env,ctx){ctx.waitUntil((async()=>{await syncOfficialSources(env);await cleanupProcessedUpdates(env);})());}
 };
