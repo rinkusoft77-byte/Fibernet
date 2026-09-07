@@ -1,6 +1,6 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
-  "name": "fibernet-support-bot",
+  "name": "fibernet",
   "main": "src/index.js",
   "compatibility_date": "2026-09-07",
   "keep_vars": true,
