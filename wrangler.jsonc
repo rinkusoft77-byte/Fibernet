@@ -1,0 +1,24 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "fibernet-support-bot",
+  "main": "src/index.js",
+  "compatibility_date": "2026-09-07",
+  "observability": { "enabled": true },
+  "triggers": {
+    "crons": ["15 23 * * *"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "fibernet-support",
+      "database_id": "REPLACE_WITH_D1_DATABASE_ID",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "vars": {
+    "PUBLIC_BASE_URL": "https://REPLACE_WITH_YOUR_WORKER_DOMAIN",
+    "SUPPORT_CHAT_ID": "REPLACE_WITH_TELEGRAM_SUPPORT_CHAT_ID",
+    "ADMIN_IDS": "",
+    "BRAND_NAME": "FiberNet"
+  }
+}
