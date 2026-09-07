@@ -11,7 +11,7 @@
     {
       "binding": "DB",
       "database_name": "fibernet-support",
-      "database_id": "REPLACE_WITH_D1_DATABASE_ID",
+      "database_id": "5d39dd4f-51b2-4c37-a7b8-60b1c3474203",
       "migrations_dir": "migrations"
     }
   ],
