@@ -13,7 +13,7 @@ export const URLS = {
   contactsUz: "https://www.fibernet.uz/language/uz/aloqa-uchun/",
   contactsRu: "https://www.fibernet.uz/contacts/",
   promotionsUz: "https://www.fibernet.uz/language/uz/sales/faol-chegirma/",
-  promotionsRu: "https://www.fibernet.uz/sales/aktivnaya-skidka/",
+  promotionsRu: "https://www.fibernet.uz/sales/acrtive-sale/",
   cabinet: "https://cabinet.fibernet.uz/"
 };
 
