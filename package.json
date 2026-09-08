@@ -1,6 +1,6 @@
 {
   "name": "fibernet-support-bot",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
   "type": "module",
   "description": "Professional FiberNet Telegram support bot for Cloudflare Workers + D1",
