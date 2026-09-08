@@ -1,9 +1,15 @@
 import app from "./index.js";
 import { MEDIA, URLS } from "./config.js";
 import {
+  addTicketMessage,
+  claimUpdate,
   clearState,
   createTicket,
+  getTicket,
+  getTicketBySupportMessage,
   getUser,
+  parseStateData,
+  releaseUpdate,
   savePhone,
   setLanguage,
   setState,
@@ -21,92 +27,72 @@ import {
   sendPhoto
 } from "./telegram.js";
 
-const VERSION = "2.1.0";
+const VERSION = "2.2.0";
 const L = (lang, uz, ru) => lang === "ru" ? ru : uz;
 
-function languageKeyboard() {
-  return inlineKeyboard([[
-    { text: "🇺🇿 O‘zbekcha", callback_data: "lang:uz" },
-    { text: "🇷🇺 Русский", callback_data: "lang:ru" }
-  ]]);
-}
+const languageKeyboard = () => inlineKeyboard([[
+  { text: "🇺🇿 O‘zbekcha", callback_data: "lang:uz" },
+  { text: "🇷🇺 Русский", callback_data: "lang:ru" }
+]]);
 
-function homeKeyboard(lang) {
-  return inlineKeyboard([
-    [
-      { text: L(lang, "📶 Tariflar", "📶 Тарифы"), callback_data: "menu:tariffs" },
-      { text: L(lang, "🛠 Texnik yordam", "🛠 Техподдержка"), callback_data: "menu:support" }
-    ],
-    [
-      { text: L(lang, "🏢 Bo‘limlar", "🏢 Отделы"), callback_data: "menu:departments" },
-      { text: L(lang, "🔌 Ulanish", "🔌 Подключение"), callback_data: "menu:connect" }
-    ],
-    [
-      { text: L(lang, "🎁 Aksiyalar", "🎁 Акции"), callback_data: "menu:promo" },
-      { text: L(lang, "🎫 Murojaatlarim", "🎫 Мои обращения"), callback_data: "menu:tickets" }
-    ],
-    [
-      { text: L(lang, "👤 Shaxsiy kabinet", "👤 Личный кабинет"), callback_data: "menu:cabinet" },
-      { text: L(lang, "☎️ Aloqa", "☎️ Контакты"), callback_data: "menu:contacts" }
-    ],
-    [
-      { text: L(lang, "⚡ Tezlik testi", "⚡ Тест скорости"), url: URLS.speed },
-      { text: "❓ FAQ", url: URLS.faq }
-    ],
-    [
-      { text: L(lang, "🧰 Xizmatlar", "🧰 Услуги"), callback_data: "menu:services" },
-      { text: L(lang, "🌐 Til", "🌐 Язык"), callback_data: "menu:language" }
-    ]
-  ]);
-}
+const homeKeyboard = lang => inlineKeyboard([
+  [
+    { text: L(lang, "📶 Tariflar", "📶 Тарифы"), callback_data: "menu:tariffs" },
+    { text: L(lang, "🛠 Texnik yordam", "🛠 Техподдержка"), callback_data: "menu:support" }
+  ],
+  [
+    { text: L(lang, "🏢 Bo‘limlar", "🏢 Отделы"), callback_data: "menu:departments" },
+    { text: L(lang, "🔌 Ulanish", "🔌 Подключение"), callback_data: "menu:connect" }
+  ],
+  [
+    { text: L(lang, "🎁 Aksiyalar", "🎁 Акции"), callback_data: "menu:promo" },
+    { text: L(lang, "🎫 Murojaatlarim", "🎫 Мои обращения"), callback_data: "menu:tickets" }
+  ],
+  [
+    { text: L(lang, "👤 Shaxsiy kabinet", "👤 Личный кабинет"), callback_data: "menu:cabinet" },
+    { text: L(lang, "☎️ Aloqa", "☎️ Контакты"), callback_data: "menu:contacts" }
+  ],
+  [
+    { text: L(lang, "⚡ Tezlik testi", "⚡ Тест скорости"), url: URLS.speed },
+    { text: "❓ FAQ", url: URLS.faq }
+  ],
+  [{ text: L(lang, "🌐 Til", "🌐 Язык"), callback_data: "menu:language" }]
+]);
 
-function departmentKeyboard(lang) {
-  return inlineKeyboard([
-    [{ text: L(lang, "🛠 Texnik yordamga yozish", "🛠 Написать в техподдержку"), callback_data: "dept:tech" }],
-    [{ text: L(lang, "👥 Abonent bo‘limi", "👥 Абонентский отдел"), callback_data: "dept:subscriber" }],
-    [{ text: L(lang, "💳 Buxgalteriya", "💳 Бухгалтерия"), callback_data: "dept:accounting" }],
-    [{ text: L(lang, "⬅️ Bosh menyu", "⬅️ Главное меню"), callback_data: "menu:home" }]
-  ]);
-}
+const departmentKeyboard = lang => inlineKeyboard([
+  [{ text: L(lang, "🛠 Texnik yordam", "🛠 Техподдержка"), callback_data: "dept:tech" }],
+  [{ text: L(lang, "👥 Abonent bo‘limi", "👥 Абонентский отдел"), callback_data: "dept:subscriber" }],
+  [{ text: L(lang, "💳 Buxgalteriya", "💳 Бухгалтерия"), callback_data: "dept:accounting" }],
+  [{ text: L(lang, "⬅️ Bosh menyu", "⬅️ Главное меню"), callback_data: "menu:home" }]
+]);
 
 function departmentMeta(dept, lang) {
-  const map = {
-    tech: {
-      icon: "🛠",
-      title: L(lang, "Texnik yordam", "Техническая поддержка"),
-      category: "other",
-      priority: "normal"
-    },
-    subscriber: {
-      icon: "👥",
-      title: L(lang, "Abonent bo‘limi", "Абонентский отдел"),
-      category: "other",
-      priority: "low"
-    },
-    accounting: {
-      icon: "💳",
-      title: L(lang, "Buxgalteriya", "Бухгалтерия"),
-      category: "billing",
-      priority: "normal"
-    }
-  };
-  return map[dept] || map.tech;
+  return ({
+    tech: { icon: "🛠", title: L(lang, "Texnik yordam", "Техническая поддержка"), category: "other", priority: "normal" },
+    subscriber: { icon: "👥", title: L(lang, "Abonent bo‘limi", "Абонентский отдел"), category: "other", priority: "low" },
+    accounting: { icon: "💳", title: L(lang, "Buxgalteriya", "Бухгалтерия"), category: "billing", priority: "normal" }
+  })[dept] || { icon: "🛠", title: L(lang, "Texnik yordam", "Техническая поддержка"), category: "other", priority: "normal" };
 }
 
 function normalizePhoneLoose(value) {
-  const raw = String(value || "").trim();
-  let digits = raw.replace(/[^0-9]/g, "");
-
-  // Uzbekistan local mobile format: 90 123 45 67 -> +998901234567
+  let digits = String(value || "").replace(/\D/g, "");
   if (digits.length === 9) digits = `998${digits}`;
-
-  // Common accidental 0-prefix: 0901234567 -> +998901234567
   if (digits.length === 10 && digits.startsWith("0")) digits = `998${digits.slice(1)}`;
-
-  // Telegram contact may return number without a leading +. Trust a real contact
-  // as long as its normalized international length is sane.
   if (digits.length >= 7 && digits.length <= 15) return `+${digits}`;
   return null;
+}
+
+function priorityFor(category, description = "") {
+  const text = String(description).toLowerCase();
+  if (/\blos\b|qizil|красн|avari|авари|uzil|обрыв/.test(text)) return "high";
+  if (category === "no_internet") return "high";
+  if (category === "connection") return "low";
+  return "normal";
+}
+
+async function claim(env, updateId) {
+  if (!Number.isInteger(updateId)) return true;
+  return claimUpdate(env, updateId);
 }
 
 async function showHome(env, chatId, lang) {
@@ -115,7 +101,6 @@ async function showHome(env, chatId, lang) {
     "⚡️ <b>FiberNet yordam markazi</b>\n\nInternet, Wi‑Fi, IPTV, tariflar, to‘lovlar va barcha bo‘limlar — bir joyda.\n\n👇 Kerakli bo‘limni tanlang:",
     "⚡️ <b>Центр помощи FiberNet</b>\n\nИнтернет, Wi‑Fi, IPTV, тарифы, платежи и все отделы — в одном месте.\n\n👇 Выберите нужный раздел:"
   );
-
   try {
     await sendChatAction(env, chatId, "upload_photo");
     return await sendPhoto(env, chatId, MEDIA.homeBanner, caption, { reply_markup: homeKeyboard(lang) });
@@ -124,122 +109,104 @@ async function showHome(env, chatId, lang) {
   }
 }
 
-async function startDepartmentFlow(env, q, lang, dept) {
-  const meta = departmentMeta(dept, lang);
-  await setState(env, q.from.id, "dept_account", { dept });
-  return sendMessage(
-    env,
-    q.message.chat.id,
-    `${meta.icon} <b>${escapeHtml(meta.title)}</b>\n\n${L(lang,
-      "Abonent login yoki shartnoma raqamingizni yuboring. Bilmasangiz <code>-</code> yuboring.\n\n🔐 Parol yubormang.",
-      "Отправьте логин абонента или номер договора. Если не знаете — отправьте <code>-</code>.\n\n🔐 Не отправляйте пароль."
-    )}`
-  );
-}
-
-async function notifyDepartmentTicket(env, ticketNo, user, data, description) {
+async function notifyTicket(env, ticketNo, user, data, category, description, department = null) {
   if (!env.SUPPORT_CHAT_ID) return;
   const lang = user.language || "uz";
-  const meta = departmentMeta(data.dept, lang);
+  const dept = department ? departmentMeta(department, lang) : null;
+  const title = dept ? `${dept.icon} ${dept.title}` : `🎫 ${L(lang, "Texnik murojaat", "Техническое обращение")}`;
   const text = [
-    `${meta.icon} <b>${escapeHtml(meta.title)} · ${escapeHtml(ticketNo)}</b>`,
+    `<b>${escapeHtml(title)} · ${escapeHtml(ticketNo)}</b>`,
     "━━━━━━━━━━━━━━",
     `👤 Telegram: <code>${user.telegram_id}</code>`,
     user.username ? `🔗 @${escapeHtml(user.username)}` : null,
     `📞 ${escapeHtml(data.phone || user.phone || "—")}`,
     `📍 ${escapeHtml(data.address || "—")}`,
     `🔐 Login: <code>${escapeHtml(data.accountLogin || "—")}</code>`,
+    `🧩 ${escapeHtml(category)}`,
     "",
     `📝 <b>${L(lang, "Murojaat", "Обращение")}:</b>`,
     escapeHtml(description),
     "",
     `💬 ${L(lang, "Shu xabarga Reply qilsangiz, javob abonentga boradi.", "Ответьте Reply на это сообщение — ответ уйдёт абоненту.")}`
   ].filter(Boolean).join("\n");
-
-  const msg = await sendMessage(env, env.SUPPORT_CHAT_ID, text, {
+  const sent = await sendMessage(env, env.SUPPORT_CHAT_ID, text, {
     reply_markup: inlineKeyboard([[{ text: "✅ Ticketni yopish", callback_data: `admin:close:${ticketNo}` }]])
   });
-  await setSupportMessageId(env, ticketNo, msg.message_id);
+  await setSupportMessageId(env, ticketNo, sent.message_id);
 }
 
-async function departmentStateFlow(env, msg, user) {
-  if (!user?.state?.startsWith("dept_")) return false;
-  const lang = user.language || "uz";
-  let data = {};
-  try { data = user.state_data ? JSON.parse(user.state_data) : {}; } catch {}
+async function createAndSendTicket(env, user, data, category, description, department = null) {
+  const diagnostic = data.diagnostic ? `${L(user.language || "uz", "Diagnostika", "Диагностика")}: ${data.diagnostic}\n\n` : "";
+  const full = `${diagnostic}${description}`.trim();
+  const ticketNo = await createTicket(env, {
+    telegramId: user.telegram_id,
+    category,
+    description: full,
+    accountLogin: data.accountLogin,
+    address: data.address,
+    phone: data.phone || user.phone,
+    priority: department ? departmentMeta(department, user.language || "uz").priority : priorityFor(category, full)
+  });
+  await clearState(env, user.telegram_id);
+  await notifyTicket(env, ticketNo, user, data, category, full, department);
+  return ticketNo;
+}
+
+async function handleCoreState(env, msg, user) {
+  const state = user?.state || "";
+  const lang = user?.language || "uz";
   const chatId = msg.chat.id;
+  const data = parseStateData(user);
 
-  if (user.state === "dept_account") {
-    if (!msg.text) return true;
-    data.accountLogin = msg.text.trim() === "-" ? null : msg.text.trim().slice(0, 80);
-    await setState(env, user.telegram_id, "dept_address", data);
-    await sendMessage(env, chatId, L(lang,
-      "📍 <b>Xizmat manzili</b>\n\nTuman, ko‘cha, uy/xonadonni yozing:",
-      "📍 <b>Адрес услуги</b>\n\nУкажите район, улицу, дом/квартиру:"
-    ));
-    return true;
-  }
-
-  if (user.state === "dept_address") {
-    if (!msg.text) return true;
-    const address = msg.text.trim();
-    if (address.length < 3) {
-      await sendMessage(env, chatId, L(lang, "⚠️ Manzilni to‘liqroq yozing.", "⚠️ Укажите адрес подробнее."));
-      return true;
-    }
-    data.address = address.slice(0, 300);
-    await setState(env, user.telegram_id, "dept_phone", data);
-    await sendMessage(env, chatId, L(lang,
-      "📞 <b>Telefon raqam</b>\n\nPastdagi tugma orqali o‘z raqamingizni yuborishingiz mumkin yoki raqamni yozing:",
-      "📞 <b>Номер телефона</b>\n\nМожно отправить свой номер кнопкой ниже или ввести его вручную:"
-    ), { reply_markup: contactKeyboard(L(lang, "📱 O‘z raqamimni yuborish", "📱 Отправить мой номер")) });
-    return true;
-  }
-
-  if (user.state === "dept_phone") {
-    const raw = msg.contact?.phone_number || msg.text || "";
-    const phone = normalizePhoneLoose(raw);
+  if (state === "ticket_phone") {
+    const phone = normalizePhoneLoose(msg.contact?.phone_number || msg.text || "");
     if (!phone) {
       await sendMessage(env, chatId, L(lang,
-        "⚠️ Raqamni aniqlab bo‘lmadi. Kontakt tugmasini bosing yoki masalan <code>+998901234567</code> ko‘rinishida yozing.",
-        "⚠️ Не удалось определить номер. Нажмите кнопку контакта или введите, например, <code>+998901234567</code>."
+        "⚠️ Raqamni aniqlab bo‘lmadi. Kontakt tugmasini bosing yoki +998901234567 ko‘rinishida yozing.",
+        "⚠️ Не удалось определить номер. Нажмите кнопку контакта или введите +998901234567."
       ), { reply_markup: contactKeyboard(L(lang, "📱 O‘z raqamimni yuborish", "📱 Отправить мой номер")) });
       return true;
     }
     data.phone = phone;
     await savePhone(env, user.telegram_id, phone);
-    await setState(env, user.telegram_id, "dept_description", data);
-    const meta = departmentMeta(data.dept, lang);
-    await sendMessage(env, chatId,
-      `${meta.icon} <b>${escapeHtml(meta.title)}</b>\n\n${L(lang,
-        "✍️ Murojaatingizni erkin yozing. Qisqa yozsangiz ham qabul qilinadi — bot majburan uzun matn talab qilmaydi.",
-        "✍️ Напишите обращение свободным текстом. Можно кратко — бот не требует длинного описания."
-      )}`,
-      { reply_markup: removeKeyboard }
-    );
+    await setState(env, user.telegram_id, "ticket_description", data);
+    await sendMessage(env, chatId, L(lang,
+      "📝 <b>Muammoni yozing</b>\n\nErkin yozishingiz mumkin. Masalan: <i>internet ishlamayapti</i> yoki <i>Wi‑Fi uzilib qolmoqda</i>.",
+      "📝 <b>Опишите проблему</b>\n\nПишите свободно. Например: <i>не работает интернет</i> или <i>Wi‑Fi постоянно отключается</i>."
+    ), { reply_markup: removeKeyboard });
     return true;
   }
 
-  if (user.state === "dept_description") {
-    if (!msg.text || !msg.text.trim()) return true;
-    const description = msg.text.trim().slice(0, 2000);
-    const meta = departmentMeta(data.dept, lang);
-    const prefixed = `${meta.icon} ${meta.title}\n\n${description}`;
-    const priority = data.dept === "tech" && /\blos\b|qizil|красн|avari|авари/i.test(description) ? "high" : meta.priority;
-    const ticketNo = await createTicket(env, {
-      telegramId: user.telegram_id,
-      category: meta.category,
-      description: prefixed,
-      accountLogin: data.accountLogin,
-      address: data.address,
-      phone: data.phone || user.phone,
-      priority
-    });
-    await clearState(env, user.telegram_id);
-    await notifyDepartmentTicket(env, ticketNo, user, data, description);
+  if (state === "ticket_description") {
+    const description = String(msg.text || "").trim();
+    if (!description) {
+      await sendMessage(env, chatId, L(lang, "✍️ Muammoni matn bilan yozing.", "✍️ Напишите проблему текстом."));
+      return true;
+    }
+    const category = data.category || "other";
+    const ticketNo = await createAndSendTicket(env, user, data, category, description.slice(0, 2000));
     await sendMessage(env, chatId, L(lang,
-      `✅ <b>Murojaat yuborildi</b>\n\n🎫 ID: <code>${ticketNo}</code>\n${meta.icon} ${escapeHtml(meta.title)}\n\nOperator javobi shu bot orqali keladi.`,
-      `✅ <b>Обращение отправлено</b>\n\n🎫 ID: <code>${ticketNo}</code>\n${meta.icon} ${escapeHtml(meta.title)}\n\nОтвет оператора придёт в этот бот.`
+      `✅ <b>Murojaat yuborildi</b>\n\n🎫 ID: <code>${ticketNo}</code>\nOperator javobi shu bot orqali keladi.`,
+      `✅ <b>Обращение отправлено</b>\n\n🎫 ID: <code>${ticketNo}</code>\nОтвет оператора придёт в этот бот.`
+    ), { reply_markup: homeKeyboard(lang) });
+    return true;
+  }
+
+  if (state === "connect_phone") {
+    const phone = normalizePhoneLoose(msg.contact?.phone_number || msg.text || "");
+    if (!phone) {
+      await sendMessage(env, chatId, L(lang, "⚠️ Telefon raqamni qayta yuboring.", "⚠️ Отправьте номер телефона ещё раз."), {
+        reply_markup: contactKeyboard(L(lang, "📱 O‘z raqamimni yuborish", "📱 Отправить мой номер"))
+      });
+      return true;
+    }
+    data.phone = phone;
+    await savePhone(env, user.telegram_id, phone);
+    const description = L(lang, "Yangi ulanish uchun ariza", "Заявка на новое подключение");
+    const ticketNo = await createAndSendTicket(env, user, data, "connection", description);
+    await sendMessage(env, chatId, L(lang,
+      `✅ <b>Ulanish arizasi qabul qilindi</b>\n\n🎫 ID: <code>${ticketNo}</code>\nOperator siz bilan bog‘lanadi.`,
+      `✅ <b>Заявка на подключение принята</b>\n\n🎫 ID: <code>${ticketNo}</code>\nОператор свяжется с вами.`
     ), { reply_markup: homeKeyboard(lang) });
     return true;
   }
@@ -247,18 +214,58 @@ async function departmentStateFlow(env, msg, user) {
   return false;
 }
 
-function transformTelegramContact(update) {
-  const msg = update?.message;
-  if (!msg?.contact?.phone_number) return update;
-  const phone = normalizePhoneLoose(msg.contact.phone_number);
-  if (!phone) return update;
+async function departmentStateFlow(env, msg, user) {
+  if (!user?.state?.startsWith("dept_")) return false;
+  const lang = user.language || "uz";
+  const data = parseStateData(user);
+  const chatId = msg.chat.id;
+  const meta = departmentMeta(data.dept, lang);
 
-  // Core v2 validates phone text. Convert a Telegram contact into a clean text
-  // number before delegating, so contact formatting can never cause a false error.
-  const cloned = structuredClone(update);
-  cloned.message.text = phone;
-  delete cloned.message.contact;
-  return cloned;
+  if (user.state === "dept_account") {
+    if (!msg.text) return true;
+    data.accountLogin = msg.text.trim() === "-" ? null : msg.text.trim().slice(0, 80);
+    await setState(env, user.telegram_id, "dept_address", data);
+    await sendMessage(env, chatId, L(lang, "📍 Xizmat manzilini yozing:", "📍 Укажите адрес услуги:"));
+    return true;
+  }
+
+  if (user.state === "dept_address") {
+    if (!msg.text) return true;
+    data.address = msg.text.trim().slice(0, 300);
+    await setState(env, user.telegram_id, "dept_phone", data);
+    await sendMessage(env, chatId, L(lang, "📞 Telefon raqamingizni yuboring:", "📞 Отправьте номер телефона:"), {
+      reply_markup: contactKeyboard(L(lang, "📱 O‘z raqamimni yuborish", "📱 Отправить мой номер"))
+    });
+    return true;
+  }
+
+  if (user.state === "dept_phone") {
+    const phone = normalizePhoneLoose(msg.contact?.phone_number || msg.text || "");
+    if (!phone) {
+      await sendMessage(env, chatId, L(lang, "⚠️ Raqamni qayta yuboring.", "⚠️ Отправьте номер ещё раз."), {
+        reply_markup: contactKeyboard(L(lang, "📱 O‘z raqamimni yuborish", "📱 Отправить мой номер"))
+      });
+      return true;
+    }
+    data.phone = phone;
+    await savePhone(env, user.telegram_id, phone);
+    await setState(env, user.telegram_id, "dept_description", data);
+    await sendMessage(env, chatId, `${meta.icon} <b>${escapeHtml(meta.title)}</b>\n\n${L(lang, "✍️ Murojaatingizni yozing:", "✍️ Напишите ваше обращение:")}`, { reply_markup: removeKeyboard });
+    return true;
+  }
+
+  if (user.state === "dept_description") {
+    const description = String(msg.text || "").trim();
+    if (!description) return true;
+    const ticketNo = await createAndSendTicket(env, user, data, meta.category, description.slice(0, 2000), data.dept);
+    await sendMessage(env, chatId, L(lang,
+      `✅ <b>Murojaat yuborildi</b>\n\n🎫 ID: <code>${ticketNo}</code>\n${meta.icon} ${escapeHtml(meta.title)}`,
+      `✅ <b>Обращение отправлено</b>\n\n🎫 ID: <code>${ticketNo}</code>\n${meta.icon} ${escapeHtml(meta.title)}`
+    ), { reply_markup: homeKeyboard(lang) });
+    return true;
+  }
+
+  return false;
 }
 
 async function handleWebhook(request, env, ctx) {
@@ -276,35 +283,37 @@ async function handleWebhook(request, env, ctx) {
     const user = await upsertUser(env, q.from);
     const lang = user.language || "uz";
 
-    if (data.startsWith("lang:")) {
-      try { await answerCallback(env, q.id); } catch {}
-      const nextLang = data.slice(5) === "ru" ? "ru" : "uz";
-      await setLanguage(env, q.from.id, nextLang);
-      await clearState(env, q.from.id);
-      await showHome(env, q.message.chat.id, nextLang);
-      return new Response("ok");
-    }
-
-    if (data === "menu:home") {
-      try { await answerCallback(env, q.id); } catch {}
-      await clearState(env, q.from.id);
-      await showHome(env, q.message.chat.id, lang);
-      return new Response("ok");
-    }
-
-    if (data === "menu:departments") {
-      try { await answerCallback(env, q.id); } catch {}
-      await sendMessage(env, q.message.chat.id, L(lang,
-        "🏢 <b>FiberNet bo‘limlari</b>\n\nKerakli bo‘limni tanlang. Har bir murojaat ticket sifatida operatorlarga yuboriladi.",
-        "🏢 <b>Отделы FiberNet</b>\n\nВыберите нужный отдел. Обращение будет отправлено операторам как ticket."
-      ), { reply_markup: departmentKeyboard(lang) });
-      return new Response("ok");
-    }
-
-    if (data.startsWith("dept:")) {
-      try { await answerCallback(env, q.id); } catch {}
-      await startDepartmentFlow(env, q, lang, data.slice(5));
-      return new Response("ok");
+    if (data.startsWith("lang:") || data === "menu:home" || data === "menu:departments" || data.startsWith("dept:")) {
+      if (!await claim(env, update.update_id)) return new Response("ok");
+      try {
+        try { await answerCallback(env, q.id); } catch {}
+        if (data.startsWith("lang:")) {
+          const nextLang = data.slice(5) === "ru" ? "ru" : "uz";
+          await setLanguage(env, q.from.id, nextLang);
+          await clearState(env, q.from.id);
+          await showHome(env, q.message.chat.id, nextLang);
+        } else if (data === "menu:home") {
+          await clearState(env, q.from.id);
+          await showHome(env, q.message.chat.id, lang);
+        } else if (data === "menu:departments") {
+          await sendMessage(env, q.message.chat.id, L(lang,
+            "🏢 <b>FiberNet bo‘limlari</b>\n\nKerakli bo‘limni tanlang:",
+            "🏢 <b>Отделы FiberNet</b>\n\nВыберите нужный отдел:"
+          ), { reply_markup: departmentKeyboard(lang) });
+        } else {
+          const dept = data.slice(5);
+          const meta = departmentMeta(dept, lang);
+          await setState(env, q.from.id, "dept_account", { dept });
+          await sendMessage(env, q.message.chat.id, `${meta.icon} <b>${escapeHtml(meta.title)}</b>\n\n${L(lang,
+            "Login yoki shartnoma raqamingizni yuboring. Bilmasangiz <code>-</code> yuboring.\n\n🔐 Parol yubormang.",
+            "Отправьте логин или номер договора. Если не знаете — отправьте <code>-</code>.\n\n🔐 Не отправляйте пароль."
+          )}`);
+        }
+        return new Response("ok");
+      } catch (err) {
+        await releaseUpdate(env, update.update_id);
+        throw err;
+      }
     }
   }
 
@@ -314,29 +323,30 @@ async function handleWebhook(request, env, ctx) {
     const text = String(msg.text || "").trim();
 
     if (text === "/start") {
-      await clearState(env, msg.from.id);
-      if (!user.language) {
-        await sendMessage(env, msg.chat.id, "🌐 <b>Tilni tanlang / Выберите язык</b>", { reply_markup: languageKeyboard() });
-      } else {
-        await showHome(env, msg.chat.id, user.language);
+      if (!await claim(env, update.update_id)) return new Response("ok");
+      try {
+        await clearState(env, msg.from.id);
+        if (!user.language) await sendMessage(env, msg.chat.id, "🌐 <b>Tilni tanlang / Выберите язык</b>", { reply_markup: languageKeyboard() });
+        else await showHome(env, msg.chat.id, user.language);
+        return new Response("ok");
+      } catch (err) {
+        await releaseUpdate(env, update.update_id);
+        throw err;
       }
-      return new Response("ok");
     }
 
     user = await getUser(env, msg.from.id);
-    if (await departmentStateFlow(env, msg, user)) return new Response("ok");
-  }
-
-  const transformed = transformTelegramContact(update);
-  if (transformed !== update) {
-    const headers = new Headers(request.headers);
-    headers.set("content-type", "application/json");
-    const forwarded = new Request(request.url, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(transformed)
-    });
-    return app.fetch(forwarded, env, ctx);
+    const shouldHandle = user?.state?.startsWith("dept_") || ["ticket_phone", "ticket_description", "connect_phone"].includes(user?.state);
+    if (shouldHandle) {
+      if (!await claim(env, update.update_id)) return new Response("ok");
+      try {
+        if (await departmentStateFlow(env, msg, user)) return new Response("ok");
+        if (await handleCoreState(env, msg, user)) return new Response("ok");
+      } catch (err) {
+        await releaseUpdate(env, update.update_id);
+        throw err;
+      }
+    }
   }
 
   return app.fetch(request, env, ctx);
