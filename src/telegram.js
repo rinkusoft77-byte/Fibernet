@@ -55,10 +55,37 @@ export function editMessage(env, chatId, messageId, text, extra = {}) {
   });
 }
 
+export function sendPhoto(env, chatId, photo, caption = "", extra = {}) {
+  return tg(env, "sendPhoto", {
+    chat_id: chatId,
+    photo,
+    caption,
+    parse_mode: "HTML",
+    ...extra
+  });
+}
+
+export function editCaption(env, chatId, messageId, caption, extra = {}) {
+  return tg(env, "editMessageCaption", {
+    chat_id: chatId,
+    message_id: messageId,
+    caption,
+    parse_mode: "HTML",
+    ...extra
+  });
+}
+
+export function sendChatAction(env, chatId, action = "typing") {
+  return tg(env, "sendChatAction", {
+    chat_id: chatId,
+    action
+  });
+}
+
 export function answerCallback(env, callbackQueryId, text) {
   return tg(env, "answerCallbackQuery", {
     callback_query_id: callbackQueryId,
-    text,
+    ...(text ? { text } : {}),
     show_alert: false
   });
 }
