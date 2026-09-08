@@ -1,4 +1,6 @@
 export const URLS = {
+  homeUz: "https://www.fibernet.uz/language/uz/uz/",
+  homeRu: "https://www.fibernet.uz/",
   home: "https://www.fibernet.uz/language/uz/uz/",
   tariffs: "https://www.fibernet.uz/language/uz/tariflar/",
   tezkor: "https://www.fibernet.uz/language/uz/tariflar/7945-2/",
@@ -10,7 +12,16 @@ export const URLS = {
   connect: "https://www.fibernet.uz/language/uz/meni-ulang-2/",
   contactsUz: "https://www.fibernet.uz/language/uz/aloqa-uchun/",
   contactsRu: "https://www.fibernet.uz/contacts/",
+  promotionsUz: "https://www.fibernet.uz/language/uz/sales/faol-chegirma/",
+  promotionsRu: "https://www.fibernet.uz/sales/aktivnaya-skidka/",
   cabinet: "https://cabinet.fibernet.uz/"
+};
+
+// Official FiberNet website artwork. Telegram can fetch HTTPS images directly.
+export const MEDIA = {
+  homeBanner: "https://www.fibernet.uz/wp-content/uploads/banner_site.png",
+  promoUz: "https://www.fibernet.uz/wp-content/uploads/active-discount-content_UZ-1.png",
+  promoRu: "https://www.fibernet.uz/wp-content/uploads/active-discount-content_%D1%80%D1%83.png"
 };
 
 export const CONTACTS = {
@@ -58,19 +69,19 @@ export const POPULAR_SERVICES = [
 
 export const DIAGNOSTICS = {
   uz: {
-    no_internet: `<b>Internet ishlamayapti</b>\n\n1) Shaxsiy kabinetda balansni tekshiring. Salbiy balans internetni bloklashi mumkin.\n2) ONU/modem va routerni 60 soniyaga o‘chirib, qayta yoqing.\n3) Optik qurilmada LOS qizil yonayotgan bo‘lsa, kabelga tegmang — texnik yordam kerak bo‘lishi mumkin.\n4) Ethernet kabeli va routerning WAN indikatorini tekshiring.`,
-    slow: `<b>Internet sekin</b>\n\n1) Tezlikni imkon qadar kabel orqali tekshiring.\n2) Wi‑Fi bo‘lsa, routerga yaqinlashing va 5 GHz tarmoqdan foydalaning.\n3) Fon yuklamalari, Windows Update, torrent va boshqa qurilmalarni vaqtincha to‘xtating.\n4) Router/ONU ni qayta ishga tushiring va testni takrorlang.`,
-    wifi: `<b>Wi‑Fi muammosi</b>\n\n1) Routerni ochiq va balandroq joyga qo‘ying.\n2) 5 GHz — tezroq, 2.4 GHz — uzoqroq masofaga.\n3) Routerni qayta yoqing.\n4) Wi‑Fi parolini begona qurilmalar ulanmasligi uchun yangilang.`,
-    iptv: `<b>IPTV / TV muammosi</b>\n\n1) Avval internet ishlayotganini tekshiring.\n2) Router va TV/pristavkani qayta yoqing.\n3) Ilovani yopib qayta oching.\n4) Muammo faqat bitta kanal yoki barcha kanallarda ekanini aniqlang.`,
-    billing: `<b>To‘lov / shaxsiy kabinet</b>\n\nBalans va tarif holatini shaxsiy kabinetdan tekshiring. Tarifni o‘zgartirish uchun yangi tarif qiymatiga yetarli depozit talab qilinishi mumkin. Bot hech qachon kabinet parolingizni so‘ramaydi.`,
-    other: `<b>Boshqa muammo</b>\n\nOperatorga murojaat yuborish uchun ticket oching. Muammoni aniq yozing: qachondan boshlangan, qaysi qurilmalarda va indikatorlar holati.`
+    no_internet: `<b>🚫 Internet ishlamayapti</b>\n\n1️⃣ Shaxsiy kabinetda balansni tekshiring.\n2️⃣ ONU/modem va routerni 60 soniyaga o‘chirib, qayta yoqing.\n3️⃣ Optik qurilmada <b>LOS</b> qizil yonayotgan bo‘lsa, optik kabelni bukmang yoki ajratmang.\n4️⃣ Ethernet kabeli va routerning WAN indikatorini tekshiring.`,
+    slow: `<b>🐢 Internet sekin</b>\n\n1️⃣ Tezlikni imkon qadar kabel orqali tekshiring.\n2️⃣ Wi‑Fi bo‘lsa, routerga yaqinlashing va 5 GHz tarmoqdan foydalaning.\n3️⃣ Fon yuklamalari, Windows Update, torrent va boshqa qurilmalarni vaqtincha to‘xtating.\n4️⃣ Router/ONU ni qayta ishga tushiring va testni takrorlang.`,
+    wifi: `<b>📡 Wi‑Fi muammosi</b>\n\n1️⃣ Routerni ochiq va balandroq joyga qo‘ying.\n2️⃣ 5 GHz — tezroq, 2.4 GHz — uzoqroq masofaga.\n3️⃣ Routerni qayta yoqing.\n4️⃣ Wi‑Fi parolini begona qurilmalar ulanmasligi uchun yangilang.`,
+    iptv: `<b>📺 IPTV / TV muammosi</b>\n\n1️⃣ Avval internet ishlayotganini tekshiring.\n2️⃣ Router va TV/pristavkani qayta yoqing.\n3️⃣ Ilovani yopib qayta oching.\n4️⃣ Muammo faqat bitta kanal yoki barcha kanallarda ekanini aniqlang.`,
+    billing: `<b>💳 To‘lov / shaxsiy kabinet</b>\n\nBalans va tarif holatini shaxsiy kabinetdan tekshiring. Tarifni o‘zgartirish uchun yangi tarif qiymatiga yetarli depozit talab qilinishi mumkin.\n\n🔐 Bot hech qachon kabinet parolingizni so‘ramaydi.`,
+    other: `<b>📝 Boshqa muammo</b>\n\nOperatorga murojaat yuborish uchun ticket oching. Muammoni aniq yozing: qachondan boshlangan, qaysi qurilmalarda va indikatorlar holati.`
   },
   ru: {
-    no_internet: `<b>Нет интернета</b>\n\n1) Проверьте баланс в личном кабинете. Отрицательный баланс может блокировать доступ.\n2) Отключите ONU/модем и роутер на 60 секунд, затем включите.\n3) Если на оптическом терминале красным горит LOS, не трогайте оптоволокно — может потребоваться техническая поддержка.\n4) Проверьте Ethernet-кабель и индикатор WAN на роутере.`,
-    slow: `<b>Низкая скорость</b>\n\n1) По возможности измерьте скорость по кабелю.\n2) По Wi‑Fi подойдите ближе к роутеру и используйте 5 GHz.\n3) Временно остановите фоновые загрузки, Windows Update, торренты и другие устройства.\n4) Перезагрузите роутер/ONU и повторите тест.`,
-    wifi: `<b>Проблема с Wi‑Fi</b>\n\n1) Поставьте роутер выше и на открытом месте.\n2) 5 GHz быстрее, 2.4 GHz лучше работает на расстоянии.\n3) Перезагрузите роутер.\n4) Обновите пароль Wi‑Fi, чтобы исключить посторонние подключения.`,
-    iptv: `<b>Проблема IPTV / ТВ</b>\n\n1) Сначала проверьте, работает ли интернет.\n2) Перезагрузите роутер и ТВ/приставку.\n3) Перезапустите приложение.\n4) Уточните, проблема на одном канале или на всех.`,
-    billing: `<b>Оплата / личный кабинет</b>\n\nПроверьте баланс и тариф в личном кабинете. Для смены тарифа может потребоваться депозит не ниже стоимости нового тарифа. Бот никогда не запрашивает пароль от личного кабинета.`,
-    other: `<b>Другая проблема</b>\n\nСоздайте заявку оператору. Опишите, когда началась проблема, на каких устройствах и какие индикаторы горят.`
+    no_internet: `<b>🚫 Нет интернета</b>\n\n1️⃣ Проверьте баланс в личном кабинете.\n2️⃣ Отключите ONU/модем и роутер на 60 секунд, затем включите.\n3️⃣ Если на оптическом терминале красным горит <b>LOS</b>, не сгибайте и не отсоединяйте оптоволокно.\n4️⃣ Проверьте Ethernet-кабель и индикатор WAN на роутере.`,
+    slow: `<b>🐢 Низкая скорость</b>\n\n1️⃣ По возможности измерьте скорость по кабелю.\n2️⃣ По Wi‑Fi подойдите ближе к роутеру и используйте 5 GHz.\n3️⃣ Временно остановите фоновые загрузки, Windows Update, торренты и другие устройства.\n4️⃣ Перезагрузите роутер/ONU и повторите тест.`,
+    wifi: `<b>📡 Проблема с Wi‑Fi</b>\n\n1️⃣ Поставьте роутер выше и на открытом месте.\n2️⃣ 5 GHz быстрее, 2.4 GHz лучше работает на расстоянии.\n3️⃣ Перезагрузите роутер.\n4️⃣ Обновите пароль Wi‑Fi, чтобы исключить посторонние подключения.`,
+    iptv: `<b>📺 Проблема IPTV / ТВ</b>\n\n1️⃣ Сначала проверьте, работает ли интернет.\n2️⃣ Перезагрузите роутер и ТВ/приставку.\n3️⃣ Перезапустите приложение.\n4️⃣ Уточните, проблема на одном канале или на всех.`,
+    billing: `<b>💳 Оплата / личный кабинет</b>\n\nПроверьте баланс и тариф в личном кабинете. Для смены тарифа может потребоваться депозит не ниже стоимости нового тарифа.\n\n🔐 Бот никогда не запрашивает пароль от личного кабинета.`,
+    other: `<b>📝 Другая проблема</b>\n\nСоздайте заявку оператору. Опишите, когда началась проблема, на каких устройствах и какие индикаторы горят.`
   }
 };
