@@ -1,7 +1,10 @@
 import v9 from './index-v9.js';
-import { tg } from './telegram.js';
+import { clearSession, ensureV5Schema, upsertUser } from './v5-db.js';
+import { claimV7Update, releaseV7Update } from './v7-routing.js';
+import { languageKeyboard } from './v8-ui.js';
+import { sendMessage, tg } from './telegram.js';
 
-const VERSION = '10.0.0';
+const VERSION = '10.1.0';
 const WEBHOOK_PATH = '/telegram/webhook';
 
 async function derivedWebhookSecret(env) {
@@ -40,6 +43,31 @@ function delegateWithLegacySecret(request, env) {
   return new Request(request, { headers });
 }
 
+function isStartCommand(update) {
+  const msg = update?.message;
+  if (!msg || msg.chat?.type !== 'private') return false;
+  return /^\/start(?:@\w+)?(?:\s|$)/i.test(String(msg.text || '').trim());
+}
+
+async function forceLanguageChoice(env, update) {
+  const msg = update.message;
+  await ensureV5Schema(env);
+  if (!await claimV7Update(env, update.update_id)) return;
+  try {
+    const user = await upsertUser(env, msg.from);
+    await clearSession(env, user.telegram_id);
+    await sendMessage(
+      env,
+      msg.chat.id,
+      '🌐 <b>Tilni tanlang / Выберите язык</b>\n\n🇺🇿 O‘zbek tilini tanlang yoki 🇷🇺 Русский язык.',
+      { reply_markup: languageKeyboard() }
+    );
+  } catch (e) {
+    await releaseV7Update(env, update.update_id);
+    throw e;
+  }
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -57,7 +85,18 @@ export default {
         return new Response('Unauthorized', { status: 401 });
       }
 
-      return v9.fetch(delegateWithLegacySecret(request, env), env, ctx);
+      const delegate = request.clone();
+      try {
+        const update = await request.json();
+        if (Number.isInteger(update?.update_id) && isStartCommand(update)) {
+          await forceLanguageChoice(env, update);
+          return new Response('ok');
+        }
+      } catch (e) {
+        console.error('v10 start interceptor', String(e));
+      }
+
+      return v9.fetch(delegateWithLegacySecret(delegate, env), env, ctx);
     }
 
     if (request.method === 'GET' && url.pathname === '/health') {
@@ -65,7 +104,7 @@ export default {
       const response = await v9.fetch(request, env, ctx);
       try {
         const data = await response.clone().json();
-        return Response.json({ ...data, gateway_version: VERSION, webhook_mode: 'auto-token-bound' }, { status: response.status });
+        return Response.json({ ...data, gateway_version: VERSION, webhook_mode: 'auto-token-bound', start_language_required: true }, { status: response.status });
       } catch {
         return response;
       }
@@ -84,4 +123,4 @@ export default {
   }
 };
 
-export const __test = { derivedWebhookSecret, webhookUrl };
+export const __test = { derivedWebhookSecret, webhookUrl, isStartCommand };
