@@ -1,190 +1,114 @@
-# FiberNet Support Bot
+# FiberNet Customer Portal Bot v3
 
-Professional Telegram technical-support bot for **FiberNet / NET TELEVISION**, designed for **Cloudflare Workers + D1** and Telegram webhooks.
+Professional Telegram customer portal for **FiberNet / NET TELEVISION** on **Cloudflare Workers + D1**.
 
-## What is included
+The v3 goal is simple: a customer should be able to do almost everything from the Telegram bot without being sent around different pages.
+
+## Customer portal
 
 - Uzbek and Russian UI.
-- Guided diagnostics: no internet, low speed, Wi‑Fi, IPTV/TV, billing/cabinet, other issues.
-- Support ticket workflow with subscriber login, address, phone and description.
-- New-connection request workflow.
-- Telegram operator group integration:
-  - every ticket is posted to the support group;
-  - operator can **Reply** to the ticket message and the reply is relayed to the subscriber;
-  - `/reply FN-... message`, `/close FN-...`, `/tickets`, `/stats`, `/sync` commands;
-  - inline **Close ticket** button.
-- D1 persistence for users, tickets, messages, source cache and deduplication.
-- Official FiberNet data synchronization once per day from `fibernet.uz`.
-- Dynamic parsing of TEZKOR and OnLine tariff pages, with safe fallback tariff data.
-- `/health` endpoint and protected `/admin/sync` endpoint.
-- Telegram webhook validation with `secret_token`.
-- No subscriber passwords are requested or stored.
+- Bot-native main menu; tariffs, services, promotions, contacts and support flows stay inside Telegram.
+- Persistent customer profile: subscriber login/contract number, address and phone.
+- Telegram `request_contact` phone support with tolerant normalization.
+- Free-text routing: customers can simply write messages such as `internet yo'q`, `to'lov tushmadi`, `wifi uzilyapti`, `yangi ulanish kerak` and the bot routes the request.
+- Technical diagnostics for no internet, low speed, Wi‑Fi, IPTV/TV and ONU/router issues.
+- Departments:
+  - technical support;
+  - subscriber department;
+  - accounting;
+  - new connections.
+- Bot-native TEZKOR and OnLine tariff browsing with pagination.
+- My Profile and My Requests sections.
+- Customer can reply to an open ticket with text, photo or file.
+- Customer satisfaction feedback after resolution/closure.
 
-## Official information sources
+## Operator workspace
 
-The bot uses only official FiberNet resources for the provider-facing information:
+Every customer request is posted to the configured operator group with:
 
-- `https://www.fibernet.uz/language/uz/uz/`
-- `https://www.fibernet.uz/language/uz/tariflar/`
-- `https://www.fibernet.uz/language/uz/tariflar/7945-2/`
-- `https://www.fibernet.uz/language/uz/tariflar/online-new/`
-- `https://www.fibernet.uz/language/uz/savol-va-javoblar/`
-- `https://www.fibernet.uz/language/uz/sozlamalar/`
-- `https://www.fibernet.uz/language/uz/tezlik-sinovi/`
-- `https://www.fibernet.uz/language/uz/dop_uslugi_uz/`
-- `https://www.fibernet.uz/language/uz/aloqa-uchun/`
-- `https://www.fibernet.uz/contacts/`
-- `https://cabinet.fibernet.uz/`
+- priority (`CRITICAL`, `HIGH`, `NORMAL`, `LOW`);
+- department and category;
+- subscriber profile and ticket context;
+- inline actions: **Claim**, **Wait for customer**, **Resolve**, **Close**.
 
-> Note: Uzbek and Russian contact pages currently expose different extension numbers. The bot therefore publishes the verified main number `+998 71 200-47-47` and the official email addresses instead of hard-coding a potentially wrong extension.
+Operators can reply directly to the original ticket message. The bot relays the reply to the customer. Media replies are also supported.
 
-## Cloudflare deployment
-
-### 1. Install
-
-```bash
-npm install
-```
-
-### 2. Create D1 database
-
-```bash
-npx wrangler login
-npx wrangler d1 create fibernet-support
-```
-
-Copy the returned database UUID into `wrangler.jsonc`:
-
-```json
-"database_id": "YOUR_D1_DATABASE_ID"
-```
-
-### 3. Apply migrations
-
-```bash
-npm run db:migrate:remote
-```
-
-### 4. Configure Worker variables
-
-In `wrangler.jsonc` replace:
-
-- `PUBLIC_BASE_URL`
-- `SUPPORT_CHAT_ID`
-- optionally `ADMIN_IDS` as comma-separated Telegram user IDs.
-
-`SUPPORT_CHAT_ID` is normally a negative group/supergroup ID, for example `-1001234567890`.
-
-### 5. Configure secrets
-
-```bash
-npx wrangler secret put TELEGRAM_BOT_TOKEN
-npx wrangler secret put TELEGRAM_WEBHOOK_SECRET
-npx wrangler secret put ADMIN_API_TOKEN
-```
-
-`TELEGRAM_WEBHOOK_SECRET` must contain only `A-Z`, `a-z`, `0-9`, `_` and `-`.
-
-Generate secrets locally, for example:
-
-```bash
-openssl rand -hex 32
-```
-
-### 6. Deploy
-
-```bash
-npm run deploy
-```
-
-After deploy, set `PUBLIC_BASE_URL` to the final Worker/custom-domain URL and deploy once more if needed.
-
-### 7. Register Telegram webhook
-
-On your local machine:
-
-```bash
-export TELEGRAM_BOT_TOKEN='...'
-export TELEGRAM_WEBHOOK_SECRET='...'
-export PUBLIC_BASE_URL='https://your-worker.example.com'
-npm run webhook
-```
-
-Telegram will send updates to:
+Commands in an operator group:
 
 ```text
-POST /telegram/webhook
-```
-
-### 8. Add the bot to the operator group
-
-1. Add the Telegram bot to the FiberNet support group.
-2. Give it permission to read/send messages as needed.
-3. Put that group's ID into `SUPPORT_CHAT_ID`.
-4. Deploy again.
-
-Operators can now reply directly to a ticket message.
-
-## Cloudflare Cron
-
-`wrangler.jsonc` runs sync at:
-
-```text
-15 23 * * *
-```
-
-Cloudflare Cron uses UTC. This is 04:15 in Uzbekistan (UTC+5). The job refreshes official FiberNet pages and removes old Telegram update-deduplication rows.
-
-## Endpoints
-
-- `GET /` — service marker.
-- `GET /health` — D1 + source-sync health.
-- `POST /telegram/webhook` — Telegram webhook; protected by Telegram secret header.
-- `POST /admin/sync` — manual FiberNet source sync; requires `Authorization: Bearer <ADMIN_API_TOKEN>`.
-
-## Admin commands
-
-Inside the configured support group:
-
-```text
-/tickets
+/queue
 /stats
-/sync
-/close FN-260907-ABC123
-/reply FN-260907-ABC123 Assalomu alaykum, liniyani tekshiryapmiz.
+/close FN-...
+/help
 ```
 
-The easiest reply workflow is simply to **reply to the original ticket message** in the group.
+## Ticket lifecycle
 
-## User commands
+Ticket `status` remains `open/closed` for compatibility. v3 adds an operational `stage`:
 
 ```text
-/start
-/language
-/tickets
-/cancel
+new -> in_progress -> waiting_customer -> resolved -> closed
 ```
 
-## Local development
+The bot tracks assignment, first response, last customer/operator activity, feedback and SLA reminders.
 
-Create `.dev.vars` from `.dev.vars.example`, then:
+## SLA
 
-```bash
-npm run db:migrate:local
-npm run dev
+Cloudflare Cron runs an hourly support check. Open tickets that have waited too long receive a reminder in the correct operator group.
+
+Daily at `23:15 UTC` the bot refreshes official FiberNet public data and cleans old Telegram update-deduplication records.
+
+## Routing groups
+
+`SUPPORT_CHAT_ID` is the fallback operator group.
+
+Optional variables can later split departments into separate groups without changing code:
+
+```text
+TECH_CHAT_ID
+SUBSCRIBER_CHAT_ID
+ACCOUNTING_CHAT_ID
+CONNECTION_CHAT_ID
 ```
 
-Run tests:
+If these are not configured, all departments use `SUPPORT_CHAT_ID`.
 
-```bash
-npm test
+## Data and schema
+
+v3 uses a self-healing D1 schema layer (`src/portal-db.js`). It adds portal columns only when missing, which lets an existing production database upgrade without a destructive migration.
+
+The original D1 tables remain compatible. New portal metadata includes department, stage, assignment, first response, resolution, satisfaction and SLA fields.
+
+## Project structure
+
+```text
+src/index-v3.js       production Worker entrypoint
+src/portal-db.js      v3 D1/customer portal data layer
+src/portal-ui.js      UI, routing, phone normalization and classification
+src/catalog.js        official source sync + tariff parsing
+src/telegram.js       Telegram Bot API wrapper
+src/config.js         public FiberNet catalog/contact configuration
 ```
 
-## Security notes
+`wrangler.jsonc` points directly to `src/index-v3.js`; v3 no longer chains the old v2 wrapper entrypoints, which avoids duplicated webhook/state processing.
 
-- Do not commit bot tokens or API tokens.
-- Keep Telegram webhook secret enabled.
-- Do not request subscriber cabinet passwords through Telegram.
-- D1 uses parameterized queries throughout the bot.
-- Keep the support group private and restrict administrator access.
-- If a billing/customer API becomes available later, integrate it with a separate secret and least-privilege credentials rather than scraping private subscriber data.
+## Security
+
+- Telegram webhook requests require `TELEGRAM_WEBHOOK_SECRET`.
+- Bot/API secrets belong in Cloudflare Secrets, not GitHub.
+- Subscriber passwords are never requested or stored.
+- D1 queries use parameter binding.
+- Duplicate Telegram updates are rejected through `processed_updates`.
+- Operator group access should remain private/restricted.
+
+A real-time balance, billing history or automatic payment verification must only be added when FiberNet provides an authorized billing/customer API. The bot must not invent account data or scrape private customer accounts.
+
+## Health
+
+```text
+GET /health
+```
+
+Returns service version, portal state, ticket statistics and source-sync status.
+
+Current production generation: **v3.0.0**.
