@@ -14,13 +14,16 @@ import {
   answerCallback, escapeHtml, inlineKeyboard, sendMessage, tg
 } from './telegram.js';
 
-const VERSION = '9.0.0';
+const VERSION = '9.1.0';
 const ENV_CHAT_KEYS = {
   tech: 'TECH_CHAT_ID',
   accounting: 'ACCOUNTING_CHAT_ID',
   subscriber: 'SUBSCRIBER_CHAT_ID',
   connection: 'CONNECTION_CHAT_ID'
 };
+
+let cachedBotId = null;
+const chatReachability = new Map();
 
 function adminIds(env) {
   return String(env.ADMIN_IDS || '').split(/[\s,;]+/).filter(Boolean).map(String);
@@ -56,13 +59,20 @@ async function binderAllowed(env, chatId, userId) {
 }
 
 async function botCanUseChat(env, chatId) {
+  const key = String(chatId);
+  const cached = chatReachability.get(key);
+  if (cached && Date.now() - cached.at < 60000) return cached.ok;
   try {
-    const me = await tg(env, 'getMe', {});
-    const m = await tg(env, 'getChatMember', { chat_id: chatId, user_id: me.id });
-    if (!m || m.status === 'left' || m.status === 'kicked') return false;
-    if (m.status === 'restricted' && m.can_send_messages === false) return false;
-    return true;
-  } catch { return false; }
+    if (!cachedBotId) cachedBotId = (await tg(env, 'getMe', {}))?.id || null;
+    if (!cachedBotId) return false;
+    const m = await tg(env, 'getChatMember', { chat_id: chatId, user_id: cachedBotId });
+    const ok = Boolean(m && m.status !== 'left' && m.status !== 'kicked' && !(m.status === 'restricted' && m.can_send_messages === false));
+    chatReachability.set(key, { ok, at: Date.now() });
+    return ok;
+  } catch {
+    chatReachability.set(key, { ok: false, at: Date.now() });
+    return false;
+  }
 }
 
 async function candidateChats(env, department) {
@@ -107,12 +117,16 @@ async function deliverExistingTicket(env, ticketNo) {
   let lastError = null;
   for (const route of await candidateChats(env, t.department)) {
     try {
-      if (!await botCanUseChat(env, route.chatId)) throw new Error(`Bot has no access to ${route.chatId}`);
+      // Fast path: try sending immediately. Avoid getMe + getChatMember before every ticket.
       const sent = await sendMessage(env, route.chatId, text, { reply_markup: operatorKeyboard(ticketNo) });
       await setSupportMessage(env, ticketNo, route.chatId, sent.message_id);
       await deliveryDone(env, ticketNo);
+      chatReachability.set(String(route.chatId), { ok: true, at: Date.now() });
       return true;
-    } catch (e) { lastError = e; }
+    } catch (e) {
+      lastError = e;
+      chatReachability.set(String(route.chatId), { ok: false, at: Date.now() });
+    }
   }
   await enqueueDelivery(env, ticketNo, lastError || `No operator group configured for ${t.department}`);
   return false;
@@ -186,7 +200,7 @@ async function interceptQueuedReply(env, q) {
   const no = data.slice('ticket:reply:'.length);
   const t = await getTicket(env, no);
   if (!t || String(t.telegram_id) !== String(q.from.id) || t.status !== 'open') return false;
-  if (t.support_chat_id && await botCanUseChat(env, t.support_chat_id)) return false;
+  if (t.support_chat_id) return false;
 
   const delivered = await deliverExistingTicket(env, no);
   if (delivered) return false;
@@ -216,7 +230,7 @@ export default {
     if (request.method === 'GET' && url.pathname === '/health') {
       try {
         await ensureV5Schema(env); await ensureV7Routing(env);
-        return Response.json({ ok: true, service: 'fibernet-bot', version: VERSION, architecture: 'guided-department-groups', stats: await stats(env), routes: await routesHealth(env) });
+        return Response.json({ ok: true, service: 'fibernet-bot', version: VERSION, architecture: 'guided-department-groups-fast', stats: await stats(env), routes: await routesHealth(env) });
       } catch (e) { return Response.json({ ok: false, version: VERSION, error: String(e) }, { status: 503 }); }
     }
     if (request.method === 'GET' && url.pathname === '/') return new Response(`FiberNet Assistant v${VERSION} is running.`);
@@ -226,14 +240,27 @@ export default {
       let update;
       try { update = await request.json(); } catch { return new Response('Bad Request', { status: 400 }); }
       try {
-        await ensureV5Schema(env); await ensureV7Routing(env);
-        if (update.my_chat_member && await handleMyChatMember(env, update)) return new Response('ok');
-        if (update.message && await handleSetupMessage(env, update.message)) return new Response('ok');
-        if (update.callback_query && await handleBindCallback(env, update.callback_query)) return new Response('ok');
-        if (update.callback_query && await interceptQueuedReply(env, update.callback_query)) return new Response('ok');
+        // Ordinary private messages/buttons go straight to v8. This avoids doing the
+        // same D1 schema work twice on every Telegram update.
+        if (update.my_chat_member) {
+          await ensureV5Schema(env); await ensureV7Routing(env);
+          if (await handleMyChatMember(env, update)) return new Response('ok');
+        }
+        if (update.message && isGroup(update.message.chat) && /^\/setup(?:@\w+)?$/i.test(String(update.message.text || '').trim())) {
+          await ensureV5Schema(env); await ensureV7Routing(env);
+          if (await handleSetupMessage(env, update.message)) return new Response('ok');
+        }
+        if (update.callback_query && String(update.callback_query.data || '').startsWith('bindhere:')) {
+          await ensureV5Schema(env); await ensureV7Routing(env);
+          if (await handleBindCallback(env, update.callback_query)) return new Response('ok');
+        }
+        if (update.callback_query && String(update.callback_query.data || '').startsWith('ticket:reply:')) {
+          await ensureV5Schema(env); await ensureV7Routing(env);
+          if (await interceptQueuedReply(env, update.callback_query)) return new Response('ok');
+        }
         return v8.fetch(delegate, env, ctx);
       } catch (e) {
-        console.error('FiberNet v9 wrapper error', { error: String(e), stack: e?.stack });
+        console.error('FiberNet v9.1 wrapper error', { error: String(e), stack: e?.stack });
         return new Response('Retry', { status: 500 });
       }
     }
