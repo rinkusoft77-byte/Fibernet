@@ -1,8 +1,10 @@
 const now = () => new Date().toISOString();
+let routingReady = false;
 
 export const DEPARTMENTS = ['general','tech','accounting','subscriber','connection'];
 
 export async function ensureV7Routing(env) {
+  if (routingReady) return;
   const statements = [
     `CREATE TABLE IF NOT EXISTS fn7_department_chats (
       department TEXT PRIMARY KEY,
@@ -26,6 +28,7 @@ export async function ensureV7Routing(env) {
     `CREATE INDEX IF NOT EXISTS idx_fn7_operator_ticket ON fn7_operator_sessions(ticket_no)`
   ];
   for (const sql of statements) await env.DB.prepare(sql).run();
+  routingReady = true;
 }
 
 export function validDepartment(department) {
