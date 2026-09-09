@@ -1,12 +1,12 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "fibernet",
-  "main": "src/index-v23.js",
+  "main": "src/index-v3.js",
   "compatibility_date": "2026-09-07",
   "keep_vars": true,
   "observability": { "enabled": true },
   "triggers": {
-    "crons": ["15 23 * * *"]
+    "crons": ["0 * * * *", "15 23 * * *"]
   },
   "d1_databases": [
     {
