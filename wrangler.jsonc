@@ -1,7 +1,7 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "fibernet",
-  "main": "src/index-v6.js",
+  "main": "src/index-v7.js",
   "compatibility_date": "2026-09-07",
   "keep_vars": true,
   "observability": { "enabled": true },
