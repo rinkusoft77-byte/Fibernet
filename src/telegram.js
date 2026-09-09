@@ -82,12 +82,19 @@ export function sendChatAction(env, chatId, action = "typing") {
   });
 }
 
-export function answerCallback(env, callbackQueryId, text) {
-  return tg(env, "answerCallbackQuery", {
-    callback_query_id: callbackQueryId,
-    ...(text ? { text } : {}),
-    show_alert: false
-  });
+export async function answerCallback(env, callbackQueryId, text) {
+  try {
+    return await tg(env, "answerCallbackQuery", {
+      callback_query_id: callbackQueryId,
+      ...(text ? { text } : {}),
+      show_alert: false
+    });
+  } catch (error) {
+    // Callback acknowledgements can expire or be attempted twice. Never let that
+    // break the actual button action / webhook flow.
+    console.warn("answerCallbackQuery ignored", String(error));
+    return null;
+  }
 }
 
 export function editReplyMarkup(env, chatId, messageId, replyMarkup = { inline_keyboard: [] }) {
