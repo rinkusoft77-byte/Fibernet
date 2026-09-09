@@ -20,16 +20,41 @@ export function escapeHtml(value = "") {
     .replaceAll('"', "&quot;");
 }
 
-export async function tg(env, method, payload) {
-  if (!env.TELEGRAM_BOT_TOKEN) throw new Error("TELEGRAM_BOT_TOKEN is missing");
+async function telegramRequest(env, method, payload) {
   const res = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/${method}`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(payload)
   });
-  const data = await res.json();
+  let data;
+  try { data = await res.json(); }
+  catch { data = { ok: false, description: `HTTP ${res.status}` }; }
+  return { res, data };
+}
+
+export async function tg(env, method, payload) {
+  if (!env.TELEGRAM_BOT_TOKEN) throw new Error("TELEGRAM_BOT_TOKEN is missing");
+
+  let currentPayload = { ...payload };
+  let { res, data } = await telegramRequest(env, method, currentPayload);
+
+  // Telegram can migrate a normal group to a supergroup and invalidate the old
+  // chat id. When that happens Telegram returns migrate_to_chat_id. Retry once
+  // automatically so support tickets still reach the operator group.
+  const migratedChatId = data?.parameters?.migrate_to_chat_id;
+  if ((!res.ok || !data.ok) && migratedChatId && currentPayload.chat_id != null) {
+    console.warn("Telegram chat migrated; retrying", {
+      method,
+      from: String(currentPayload.chat_id),
+      to: String(migratedChatId)
+    });
+    currentPayload = { ...currentPayload, chat_id: migratedChatId };
+    ({ res, data } = await telegramRequest(env, method, currentPayload));
+  }
+
   if (!res.ok || !data.ok) {
-    throw new Error(`Telegram ${method} failed: ${data.description || res.status}`);
+    const chatInfo = currentPayload.chat_id != null ? `; chat_id=${currentPayload.chat_id}` : "";
+    throw new Error(`Telegram ${method} failed: ${data?.description || res.status}${chatInfo}`);
   }
   return data.result;
 }
