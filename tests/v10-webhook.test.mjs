@@ -15,3 +15,11 @@ test('webhook URL is normalized', () => {
     'https://example.workers.dev/telegram/webhook'
   );
 });
+
+test('/start always triggers language selection in private chat', () => {
+  assert.equal(__test.isStartCommand({ message: { text: '/start', chat: { type: 'private' } } }), true);
+  assert.equal(__test.isStartCommand({ message: { text: '/start payload', chat: { type: 'private' } } }), true);
+  assert.equal(__test.isStartCommand({ message: { text: '/start@FiberNetBot', chat: { type: 'private' } } }), true);
+  assert.equal(__test.isStartCommand({ message: { text: '/start', chat: { type: 'supergroup' } } }), false);
+  assert.equal(__test.isStartCommand({ message: { text: '/profile', chat: { type: 'private' } } }), false);
+});
