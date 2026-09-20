@@ -1,5 +1,5 @@
 import {
-  addMessage, closeTicket, getSession, getTicket, getUser, setStage
+  addMessage, clearSession, closeTicket, getSession, getTicket, getUser, sessionData, setStage
 } from './v5-db.js';
 import { getDepartmentByChat } from './v7-routing.js';
 import { L, operatorName } from './v8-ui.js';
@@ -135,18 +135,18 @@ async function topicTicket(env, msg) {
 }
 
 async function activeUserTicket(env, telegramId) {
+  // Strict rule: a private user message belongs to an operator ticket ONLY
+  // after the user explicitly pressed "Operatorga javob / Ответить оператору".
+  // An open ticket, recent live pointer, or normal bot conversation is never
+  // enough to forward private messages to an operator group.
   const s = await getSession(env, telegramId);
-  if (s && s.state !== 'ticket_reply') return null;
-  try {
-    const live = await env.DB.prepare(`SELECT ticket_no FROM fn11_user_live
-      WHERE telegram_id=? AND datetime(updated_at)>=datetime('now','-24 hours')`).bind(telegramId).first();
-    if (live?.ticket_no) {
-      const t = await getTicket(env, live.ticket_no);
-      if (t?.status === 'open') return t;
-    }
-  } catch {}
-  return env.DB.prepare(`SELECT * FROM fn5_tickets WHERE telegram_id=? AND status='open'
-    ORDER BY id DESC LIMIT 1`).bind(telegramId).first();
+  if (!s || s.state !== 'ticket_reply') return null;
+  const d = sessionData(s);
+  const no = d?.ticketNo;
+  if (!no) return null;
+  const t = await getTicket(env, no);
+  if (!t || t.status !== 'open' || String(t.telegram_id) !== String(telegramId)) return null;
+  return t;
 }
 
 async function setUserLive(env, telegramId, ticketNo) {
@@ -334,6 +334,13 @@ async function userRelay(env, msg, t, topic) {
     targetThreadId: topic.thread_id,
     replyToTargetMessageId: replyTo
   });
+
+  // One explicit reply action sends exactly one user message/media item.
+  // Clear the routing session even when delivery was queued: the submitted
+  // message is already persisted in the outbox and must not make later bot
+  // navigation/messages leak into the operator group.
+  await clearSession(env, msg.from.id);
+
   if (!r.ok) {
     const u = await getUser(env, t.telegram_id);
     await sendMessage(env, msg.chat.id, L(u?.language || 'uz',
