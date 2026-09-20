@@ -27,7 +27,7 @@ async function ensureCurrentWebhook(env) {
   await tg(env, 'setWebhook', {
     url: webhookUrl(env),
     secret_token: secret,
-    allowed_updates: ['message', 'callback_query', 'my_chat_member'],
+    allowed_updates: ['message', 'edited_message', 'callback_query', 'my_chat_member'],
     drop_pending_updates: false
   });
   return true;
