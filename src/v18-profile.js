@@ -659,6 +659,14 @@ async function handleMessage(env,msg,updateId) {
     return showProfile(env,msg.chat.id,user);
   }
 
+  if(isPrivate(msg.chat) && /^\/cancel(?:@\w+)?$/i.test(text)){
+    if(!await claimUpdate(env,updateId)) return true;
+    const user=await upsertUser(env,msg.from);
+    await clearSession(env,user.telegram_id);
+    await sendMessage(env,msg.chat.id,L(user.language||'uz','❎ Amal bekor qilindi.','❎ Действие отменено.'));
+    return showHome(env,msg.chat.id,user);
+  }
+
   if((isGroup(msg.chat)||isPrivate(msg.chat)) && /^\/profiles(?:@\w+)?$/i.test(text)){
     if(!isAdmin(env,msg.from.id)) return false;
     if(!await claimUpdate(env,updateId)) return true;
@@ -674,6 +682,13 @@ async function handleMessage(env,msg,updateId) {
   const user=await upsertUser(env,msg.from);
   const s=await getSession(env,user.telegram_id);
   if(!s || !s.state?.startsWith('v18_')) return false;
+  if(text.startsWith('/')){
+    if(!await claimUpdate(env,updateId)) return true;
+    await sendMessage(env,msg.chat.id,L(user.language||'uz',
+      '⚠️ Forma ichida komanda ma’lumot sifatida qabul qilinmaydi. Kerakli qiymatni yozing yoki /cancel bilan bekor qiling.',
+      '⚠️ Команда не будет принята как данные формы. Введите нужное значение или отмените через /cancel.'));
+    return true;
+  }
   if(!await claimUpdate(env,updateId)) return true;
   return handleSessionMessage(env,msg,user,s);
 }
