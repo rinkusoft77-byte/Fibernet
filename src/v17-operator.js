@@ -379,7 +379,9 @@ async function showAssignMenu(env, q, ticketNo) {
   if (!t) { await answerCallback(env, q.id, 'Ticket topilmadi'); return true; }
   const agentsR = await env.DB.prepare(`SELECT a.*,
     (SELECT COUNT(*) FROM fn5_tickets t WHERE t.status='open' AND t.assigned_to=a.operator_id) load
-    FROM fn15_agents a WHERE a.chat_id=? AND a.status IN ('online','away')
+    FROM fn15_agents a
+    JOIN fn19_operator_acl acl ON acl.chat_id=a.chat_id AND acl.user_id=a.operator_id AND acl.status='approved'
+    WHERE a.chat_id=? AND a.status IN ('online','away')
     ORDER BY CASE a.status WHEN 'online' THEN 0 ELSE 1 END,load ASC,a.operator_name ASC LIMIT 10`)
     .bind(q.message.chat.id).all();
   await answerCallback(env, q.id, 'Operator tanlang');
@@ -397,9 +399,11 @@ async function assignToAgent(env, q, ticketNo, operatorId) {
   if (!t) { await answerCallback(env, q.id, 'Ticket topilmadi'); return true; }
   const allowed = !t.assigned_to || String(t.assigned_to) === String(q.from.id) || isAdmin(env, q.from.id);
   if (!allowed) { await answerCallback(env, q.id, 'Faqat ticket egasi yoki admin qayta biriktira oladi'); return true; }
-  const a = await env.DB.prepare('SELECT * FROM fn15_agents WHERE chat_id=? AND operator_id=?')
+  const a = await env.DB.prepare(`SELECT a.* FROM fn15_agents a
+    JOIN fn19_operator_acl acl ON acl.chat_id=a.chat_id AND acl.user_id=a.operator_id AND acl.status='approved'
+    WHERE a.chat_id=? AND a.operator_id=?`)
     .bind(q.message.chat.id, operatorId).first();
-  if (!a) { await answerCallback(env, q.id, 'Operator topilmadi'); return true; }
+  if (!a) { await answerCallback(env, q.id, 'Tasdiqlangan operator topilmadi'); return true; }
   const name = a.operator_name || a.username || String(a.operator_id);
   await env.DB.prepare(`UPDATE fn5_tickets SET assigned_to=?,assigned_name=?,stage='in_progress',updated_at=?
     WHERE ticket_no=? AND status='open'`).bind(a.operator_id, name, now(), ticketNo).run();
@@ -570,7 +574,9 @@ async function topicCommands(env, msg, t) {
     const fakeQ = { id:'', from:msg.from, message:msg };
     const agentsR = await env.DB.prepare(`SELECT a.*,
       (SELECT COUNT(*) FROM fn5_tickets x WHERE x.status='open' AND x.assigned_to=a.operator_id) load
-      FROM fn15_agents a WHERE a.chat_id=? AND a.status IN ('online','away')
+      FROM fn15_agents a
+      JOIN fn19_operator_acl acl ON acl.chat_id=a.chat_id AND acl.user_id=a.operator_id AND acl.status='approved'
+      WHERE a.chat_id=? AND a.status IN ('online','away')
       ORDER BY CASE a.status WHEN 'online' THEN 0 ELSE 1 END,load ASC,a.operator_name ASC LIMIT 10`)
       .bind(msg.chat.id).all();
     await sendMessage(env, msg.chat.id, '👥 <b>Operator tanlang</b>', {
