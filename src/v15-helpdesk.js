@@ -1,5 +1,5 @@
 import {
-  addMessage, closeTicket, getTicket, getUser, setStage
+  addMessage, clearSession, closeTicket, getTicket, getUser, setStage
 } from './v5-db.js';
 import { getDepartmentByChat, getDepartmentChat } from './v7-routing.js';
 import { accessLabel, getAccess } from './v14-access.js';
@@ -213,27 +213,19 @@ async function setUserLive(env, telegramId, ticketNo) {
 }
 
 async function activeUserTicket(env, telegramId) {
-  const session = await env.DB.prepare('SELECT state,data FROM fn5_sessions WHERE telegram_id=?').bind(telegramId).first();
-  if (session && session.state !== 'ticket_reply') return null;
-  if (session?.state === 'ticket_reply') {
-    try {
-      const data = JSON.parse(session.data || '{}');
-      if (data.ticketNo) {
-        const t = await getTicket(env, data.ticketNo);
-        if (t?.status === 'open') return t;
-      }
-    } catch {}
-  }
+  // Never infer a customer reply from "has an open ticket" or a recent live
+  // pointer. Only an explicit ticket_reply session may bridge private chat to
+  // an operator topic.
+  const session = await env.DB.prepare('SELECT state,data FROM fn5_sessions WHERE telegram_id=?')
+    .bind(telegramId).first();
+  if (!session || session.state !== 'ticket_reply') return null;
   try {
-    const live = await env.DB.prepare(`SELECT ticket_no FROM fn11_user_live
-      WHERE telegram_id=? AND datetime(updated_at)>=datetime('now','-24 hours')`).bind(telegramId).first();
-    if (live?.ticket_no) {
-      const t = await getTicket(env, live.ticket_no);
-      if (t?.status === 'open') return t;
-    }
+    const data = JSON.parse(session.data || '{}');
+    if (!data.ticketNo) return null;
+    const t = await getTicket(env, data.ticketNo);
+    if (t?.status === 'open' && String(t.telegram_id) === String(telegramId)) return t;
   } catch {}
-  return env.DB.prepare(`SELECT * FROM fn5_tickets WHERE telegram_id=? AND status='open'
-    ORDER BY id DESC LIMIT 1`).bind(telegramId).first();
+  return null;
 }
 
 async function topicForTicket(env, ticketNo) {
@@ -741,12 +733,16 @@ async function userTopicRelay(env, msg, t, topic) {
   };
   const r = await copyReliable(env, spec);
   if (!r.ok) {
+    // The exact submitted message is already queued. End the explicit reply
+    // session so subsequent bot navigation/text cannot leak to the group.
+    await clearSession(env, msg.from.id);
     const u = await getUser(env, t.telegram_id);
     await sendMessage(env, msg.chat.id, L(u?.language || 'uz',
       '⏳ Xabaringiz saqlandi. Operator guruhiga yuborish avtomatik qayta urinadi.',
       '⏳ Сообщение сохранено. Бот автоматически повторит отправку оператору.'));
     return true;
   }
+  await clearSession(env, msg.from.id);
   await addMessage(env, t.ticket_no, 'user', msg.from.id, bodyOf(msg) || `[${kind}]`, msg.message_id);
   await setStage(env, t.ticket_no, 'in_progress');
   await setUserLive(env, msg.from.id, t.ticket_no);
