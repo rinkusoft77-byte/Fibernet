@@ -403,7 +403,7 @@ async function setUserLive(env, telegramId, no) {
   } catch {}
 }
 
-async function createExpressTicket(env, msg, user, data, forceNew = false) {
+export async function createExpressTicket(env, msg, user, data, forceNew = false) {
   const lang = user.language || 'uz';
   if (!forceNew) {
     const duplicate = await findDuplicate(env, user.telegram_id, data.department, data.category);
@@ -422,10 +422,23 @@ async function createExpressTicket(env, msg, user, data, forceNew = false) {
   }
 
   const cat = categoryMeta(data.category, lang);
+  let verifiedProfile = null;
+  try {
+    verifiedProfile = await env.DB.prepare(`SELECT given_name,family_name,login,address,status
+      FROM fn18_profiles WHERE telegram_id=? AND status='approved'`).bind(user.telegram_id).first();
+  } catch {}
+  const customerName = String(data.customerName || (
+    verifiedProfile ? [verifiedProfile.given_name, verifiedProfile.family_name].filter(Boolean).join(' ') : ''
+  )).trim() || null;
+  const isVerifiedProfile = Boolean(verifiedProfile);
   const typeLine = data.entityType && data.entityType !== 'none'
     ? `${L(lang,'Mijoz turi','Тип клиента')}: ${entityTypeLabel(data.entityType, lang)}`
     : null;
+  const profileLine = customerName
+    ? `${isVerifiedProfile ? '✅' : '📝'} ${L(lang,'Mijoz','Клиент')}: ${customerName}${isVerifiedProfile ? ` · ${L(lang,'profil admin tomonidan tasdiqlangan','профиль подтверждён администратором')}` : ` · ${L(lang,'bir martalik ma’lumot','данные для этого обращения')}`}`
+    : null;
   const description = [
+    profileLine,
     typeLine,
     `${L(lang,'Tanlangan muammo','Выбранная проблема')}: ${cat.title}`,
     data.details ? `${L(lang,'Qo‘shimcha','Дополнительно')}: ${data.details}` : null,
@@ -434,13 +447,18 @@ async function createExpressTicket(env, msg, user, data, forceNew = false) {
       'Инструкция бота просмотрена; проблема не решена, обращение передано оператору.')
   ].filter(Boolean).join('\n');
 
+  const hasLogin = Object.prototype.hasOwnProperty.call(data, 'accountLogin');
+  const hasAddress = Object.prototype.hasOwnProperty.call(data, 'address');
+  const effectiveLogin = hasLogin ? data.accountLogin : (verifiedProfile?.login ?? user.account_login);
+  const effectiveAddress = hasAddress ? data.address : (verifiedProfile?.address ?? user.address);
+
   const no = await createTicket(env, {
     telegramId: user.telegram_id,
     department: data.department,
     category: data.category,
     description,
-    accountLogin: data.accountLogin ?? user.account_login,
-    address: data.address ?? user.address,
+    accountLogin: effectiveLogin || null,
+    address: effectiveAddress || null,
     phone: user.phone,
     priority: priorityFor(data.category, `${description} ${data.details || ''}`),
     telegramMessageId: msg.message_id || null
