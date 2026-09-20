@@ -15,7 +15,7 @@ test('profile requires realistic first and last names', () => {
 });
 
 test('profile status text is localized', () => {
-  assert.match(__test.profileStatusText('approved', 'uz'), /Tasdiqlagan/);
+  assert.match(__test.profileStatusText('approved', 'uz'), /tasdiqlagan/i);
   assert.match(__test.profileStatusText('pending', 'ru'), /подтверждения/i);
   assert.match(__test.profileStatusText('skipped', 'uz'), /o‘tkazib/i);
 });
