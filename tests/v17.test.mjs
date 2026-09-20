@@ -31,3 +31,14 @@ test('snooze keyboard has quick follow-up intervals', () => {
   assert.ok(callbacks.some(x => x.endsWith(':240')));
   assert.ok(callbacks.some(x => x.endsWith(':1440')));
 });
+
+
+test('customer relay requires explicit ticket_reply session', () => {
+  assert.equal(__test.explicitReplyTicketNo(null), null);
+  assert.equal(__test.explicitReplyTicketNo({ state: 'ux_details', data: '{"ticketNo":"FN-260920-ABCDEF"}' }), null);
+  assert.equal(__test.explicitReplyTicketNo({ state: 'ticket_reply', data: '{}' }), null);
+  assert.equal(
+    __test.explicitReplyTicketNo({ state: 'ticket_reply', data: '{"ticketNo":"FN-260920-ABCDEF"}' }),
+    'FN-260920-ABCDEF'
+  );
+});
