@@ -10,6 +10,7 @@ import { answerCallback, escapeHtml, inlineKeyboard, sendMessage, tg } from './t
 const now = () => new Date().toISOString();
 let ready = false;
 const adminCache = new Map();
+const auditCache = new Map();
 
 const OPERATOR_COMMANDS = new Set([
   'where','queue','tickets','stats','cancelreply',
@@ -92,6 +93,12 @@ export async function ensureV19Schema(env) {
 }
 
 async function audit(env, chatId, userId, event, command = null, threadId = null) {
+  if (event === 'blocked_unauthorized_message') {
+    const key = `${chatId}:${userId}:${event}`;
+    const last = auditCache.get(key) || 0;
+    if (Date.now() - last < 60000) return;
+    auditCache.set(key, Date.now());
+  }
   try {
     await env.DB.prepare(`INSERT INTO fn19_group_guard_events(chat_id,user_id,event,command,thread_id)
       VALUES(?,?,?,?,?)`).bind(chatId || null, userId || null, event, command || null, threadId || null).run();
@@ -185,6 +192,11 @@ async function requestAccess(env, msg) {
   const row = await aclRow(env, msg.chat.id, msg.from.id);
   if (row?.status === 'approved') {
     await sendMessage(env, msg.chat.id, '✅ Sizda operator ruxsati allaqachon bor.');
+    return true;
+  }
+  if (row?.status === 'pending' && row.requested_at &&
+      Date.now() - new Date(row.requested_at).getTime() < 10 * 60000) {
+    await sendMessage(env, msg.chat.id, '⏳ Operator ruxsati uchun so‘rovingiz allaqachon yuborilgan. Admin tasdig‘ini kuting.');
     return true;
   }
   await env.DB.prepare(`INSERT INTO fn19_operator_acl(
@@ -458,12 +470,6 @@ async function relayFallbackReply(env, msg, t) {
     await addMessage(env, t.ticket_no, 'operator', msg.from.id,
       String(msg.text || msg.caption || '').trim() || '[media]', msg.message_id);
     await setStage(env, t.ticket_no, 'waiting_customer', { id:msg.from.id, name:operatorName(msg.from) });
-    const u = await getUser(env, t.telegram_id);
-    try {
-      await sendMessage(env, t.telegram_id, L(u?.language || 'uz',
-        `💬 Operator javob berdi. 🎫 <code>${escapeHtml(t.ticket_no)}</code>\n\nJavob yozish uchun shu botga oddiy xabar/media yuboring.`,
-        `💬 Оператор ответил. 🎫 <code>${escapeHtml(t.ticket_no)}</code>\n\nЧтобы ответить, отправьте обычное сообщение или медиа в этот бот.`));
-    } catch {}
     try {
       await tg(env, 'setMessageReaction', {
         chat_id:msg.chat.id,message_id:msg.message_id,reaction:[{type:'emoji',emoji:'👍'}]
@@ -691,6 +697,7 @@ export async function runV19Maintenance(env) {
   } catch {}
   const t = Date.now();
   for (const [k,v] of adminCache.entries()) if (!v || v.until <= t) adminCache.delete(k);
+  for (const [k,ts] of auditCache.entries()) if (t - ts > 5 * 60000) auditCache.delete(k);
 }
 
 export async function v19Health(env) {
