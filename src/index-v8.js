@@ -248,7 +248,7 @@ async function beginAssist(env,q,department,type,category){
 }
 
 async function handleSession(env,msg,user,s){
-  if(!s)return false;const lang=user.language||'uz',d=sessionData(s);
+  if(!s)return false;if(String(msg.text||'').trim().startsWith('/'))return false;const lang=user.language||'uz',d=sessionData(s);
   if(s.state==='profile_account'){if(!msg.text)return true;d.accountLogin=msg.text.trim()==='-'?null:msg.text.trim().slice(0,80);await setSession(env,user.telegram_id,'profile_address',d);await sendMessage(env,msg.chat.id,L(lang,'📍 Manzilingizni yozing:','📍 Укажите адрес:'));return true;}
   if(s.state==='profile_address'){if(!msg.text?.trim())return true;d.address=msg.text.trim().slice(0,300);await setSession(env,user.telegram_id,'profile_phone',d);await sendMessage(env,msg.chat.id,L(lang,'📞 Telefonni yuboring yoki kontakt tugmasini bosing:','📞 Отправьте телефон или нажмите кнопку:'),{reply_markup:contactKeyboard(L(lang,'📱 O‘z raqamim','📱 Мой номер'))});return true;}
   if(s.state==='profile_phone'){const p=normalizePhone(msg.contact?.phone_number||msg.text||'');if(!p){await sendMessage(env,msg.chat.id,L(lang,'⚠️ Raqamni qayta yuboring.','⚠️ Отправьте номер ещё раз.'));return true;}d.phone=p;await saveProfile(env,user.telegram_id,d);await clearSession(env,user.telegram_id);await sendMessage(env,msg.chat.id,L(lang,'✅ Profil saqlandi.','✅ Профиль сохранён.'),{reply_markup:removeKeyboard});return showHome(env,msg.chat.id,lang);}
