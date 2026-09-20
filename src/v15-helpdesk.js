@@ -268,6 +268,14 @@ async function topicHeader(env, t) {
   const u = await getUser(env, t.telegram_id);
   const lang = u?.language || 'uz';
   const a = await getAccess(env, t.telegram_id);
+  let verifiedProfile = null;
+  try {
+    verifiedProfile = await env.DB.prepare(`SELECT given_name,family_name,status FROM fn18_profiles
+      WHERE telegram_id=? AND status='approved'`).bind(t.telegram_id).first();
+  } catch {}
+  const verifiedName = verifiedProfile
+    ? [verifiedProfile.given_name, verifiedProfile.family_name].filter(Boolean).join(' ')
+    : null;
   const d = departmentMeta(t.department, lang);
   const c = categoryMeta(t.category, lang);
   const access = a?.access_type ? accessLabel(a.access_type, lang) : L(lang, 'Ko‘rsatilmagan', 'Не указано');
@@ -277,7 +285,8 @@ async function topicHeader(env, t) {
     `🌐 ${escapeHtml(access)}`,
     t.assigned_name ? `👨‍💻 ${escapeHtml(t.assigned_name)}` : '👨‍💻 Unassigned',
     '',
-    `👤 <b>${escapeHtml([u?.first_name, u?.last_name].filter(Boolean).join(' ') || String(t.telegram_id))}</b>`,
+    verifiedName ? `✅ <b>${escapeHtml(verifiedName)}</b> · tasdiqlangan profil`
+      : `👤 <b>${escapeHtml([u?.first_name, u?.last_name].filter(Boolean).join(' ') || String(t.telegram_id))}</b>`,
     u?.username ? `🔗 @${escapeHtml(u.username)}` : null,
     `🔐 <code>${escapeHtml(t.account_login || '—')}</code>`,
     `📍 ${escapeHtml(t.address || '—')}`,
