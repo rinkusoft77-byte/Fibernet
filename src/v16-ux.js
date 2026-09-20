@@ -988,6 +988,21 @@ export async function handleV16Update(env, update) {
 
     const user = await upsertUser(env, msg.from);
     const s = await getSession(env, user.telegram_id);
+
+    if (s?.state?.startsWith('ux_') && text.startsWith('/')) {
+      if (!await claimUpdate(env, update.update_id)) return true;
+      if (/^\/cancel(?:@\w+)?$/i.test(text)) {
+        await clearSession(env, user.telegram_id);
+        await sendMessage(env, msg.chat.id, L(user.language || 'uz',
+          '❎ Amal bekor qilindi.', '❎ Действие отменено.'));
+        return showServiceHub(env, msg.chat.id, user);
+      }
+      await sendMessage(env, msg.chat.id, L(user.language || 'uz',
+        '⚠️ Bu komanda forma ma’lumoti sifatida qabul qilinmaydi. Kerakli qiymatni yuboring yoki /cancel bilan bekor qiling.',
+        '⚠️ Команда не будет принята как данные формы. Отправьте нужное значение или отмените через /cancel.'));
+      return true;
+    }
+
     if (s?.state === 'ux_describe') {
       if (!await claimUpdate(env, update.update_id)) return true;
       return handleDescribeMessage(env, msg, user);
