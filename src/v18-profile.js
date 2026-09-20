@@ -132,7 +132,7 @@ async function showHome(env, chatId, user) {
 async function showProfileGate(env, chatId, user) {
   const lang = user?.language === 'ru' ? 'ru' : 'uz';
   const p = await getClientProfile(env, user.telegram_id);
-  if (p?.status === 'approved') return showHome(env, chatId, user);
+  if (p?.status === 'approved' || p?.status === 'skipped') return showHome(env, chatId, user);
   const intro = p?.status === 'pending'
     ? L(lang,
       'Profilingiz admin tekshiruvida. Tasdiqlanguncha botdan foydalanishingiz mumkin, lekin operatorga murojaatda ma’lumotlar alohida so‘raladi.',
