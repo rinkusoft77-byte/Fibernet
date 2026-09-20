@@ -15,6 +15,18 @@ function adminIds(env) { return String(env.ADMIN_IDS || '').split(/[\s,;]+/).fil
 function isAdmin(env, id) { return adminIds(env).includes(String(id)); }
 function bodyOf(msg) { return String(msg?.text || msg?.caption || '').trim(); }
 
+export function explicitReplyTicketNo(session) {
+  if (!session || session.state !== 'ticket_reply') return null;
+  const d = sessionData(session);
+  return d?.ticketNo ? String(d.ticketNo) : null;
+}
+
+function customerReplyKeyboard(ticketNo) {
+  return inlineKeyboard([[
+    { text:'💬 Operatorga javob / Ответить', callback_data:`ticket:reply:${ticketNo}` }
+  ]]);
+}
+
 export function relayKind(msg = {}) {
   if (msg.text) return 'text';
   if (msg.sticker) return 'sticker';
@@ -140,9 +152,7 @@ async function activeUserTicket(env, telegramId) {
   // An open ticket, recent live pointer, or normal bot conversation is never
   // enough to forward private messages to an operator group.
   const s = await getSession(env, telegramId);
-  if (!s || s.state !== 'ticket_reply') return null;
-  const d = sessionData(s);
-  const no = d?.ticketNo;
+  const no = explicitReplyTicketNo(s);
   if (!no) return null;
   const t = await getTicket(env, no);
   if (!t || t.status !== 'open' || String(t.telegram_id) !== String(telegramId)) return null;
@@ -194,7 +204,8 @@ async function copyReliable(env, spec) {
     ...(spec.targetThreadId ? { message_thread_id: spec.targetThreadId } : {}),
     ...(spec.replyToTargetMessageId ? {
       reply_parameters: { message_id: spec.replyToTargetMessageId, allow_sending_without_reply: true }
-    } : {})
+    } : {}),
+    ...(spec.replyMarkup ? { reply_markup: spec.replyMarkup } : {})
   };
   try {
     const copied = await tg(env, 'copyMessage', payload);
@@ -299,7 +310,8 @@ async function operatorRelay(env, msg, t) {
     sourceChatId: msg.chat.id,
     sourceMessageId: msg.message_id,
     targetChatId: t.telegram_id,
-    replyToTargetMessageId: replyTo
+    replyToTargetMessageId: replyTo,
+    replyMarkup: customerReplyKeyboard(t.ticket_no)
   });
 
   if (!r.ok) {
@@ -860,7 +872,8 @@ async function retryOutbox(env) {
       const copied=await tg(env,'copyMessage',{
         chat_id:x.target_chat_id,from_chat_id:x.source_chat_id,message_id:x.source_message_id,
         ...(x.target_thread_id?{message_thread_id:x.target_thread_id}:{}),
-        ...(x.reply_to_target_message_id?{reply_parameters:{message_id:x.reply_to_target_message_id,allow_sending_without_reply:true}}:{})
+        ...(x.reply_to_target_message_id?{reply_parameters:{message_id:x.reply_to_target_message_id,allow_sending_without_reply:true}}:{}),
+        ...(x.direction==='operator_to_user'?{reply_markup:customerReplyKeyboard(x.ticket_no)}:{})
       });
       if (copied?.message_id) await saveMirror(env,x.source_chat_id,x.source_message_id,x.target_chat_id,copied.message_id,x.ticket_no,x.direction);
       await env.DB.prepare('DELETE FROM fn17_outbox WHERE id=?').bind(x.id).run();
@@ -939,5 +952,6 @@ export async function v17Health(env) {
 export const __test={
   relayKind,
   priorityKeyboard,
-  snoozeKeyboard
+  snoozeKeyboard,
+  explicitReplyTicketNo
 };
