@@ -365,8 +365,17 @@ async function autoAssign(env, t, topic = null) {
   if (!t || t.status !== 'open' || t.assigned_to) return null;
   const chatId = topic?.chat_id || t.support_chat_id || await routeChat(env, t.department);
   if (!chatId) return null;
-  const agentsR = await env.DB.prepare(`SELECT * FROM fn15_agents WHERE chat_id=? AND status='online'
-    AND datetime(updated_at)>=datetime('now','-12 hours')`).bind(chatId).all();
+  let agentsR;
+  try {
+    agentsR = await env.DB.prepare(`SELECT a.* FROM fn15_agents a
+      JOIN fn19_operator_acl acl ON acl.chat_id=a.chat_id AND acl.user_id=a.operator_id
+      WHERE a.chat_id=? AND a.status='online' AND acl.status='approved'
+        AND datetime(a.updated_at)>=datetime('now','-12 hours')`).bind(chatId).all();
+  } catch {
+    // v19 ACL is the security boundary for auto-assignment. If it is not ready,
+    // keep the ticket unassigned instead of routing it to an unverified member.
+    agentsR = { results: [] };
+  }
   const agents = agentsR.results || [];
   if (!agents.length) return null;
   const access = await getAccess(env, t.telegram_id);
