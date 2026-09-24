@@ -13,6 +13,7 @@ import {
 import {
   answerCallback, escapeHtml, inlineKeyboard, sendMessage, tg
 } from './telegram.js';
+import { ensureTopicForTicket } from './v15-helpdesk.js';
 
 const VERSION = '9.1.0';
 const ENV_CHAT_KEYS = {
@@ -92,44 +93,20 @@ function personName(u) {
 async function deliverExistingTicket(env, ticketNo) {
   const t = await getTicket(env, ticketNo);
   if (!t || t.status !== 'open') return false;
-  const u = await getUser(env, t.telegram_id);
-  const lang = u?.language || 'uz';
-  const d = departmentMeta(t.department, lang);
-  const c = categoryMeta(t.category, lang);
-  const p = t.priority === 'critical' ? '🚨' : t.priority === 'high' ? '🔴' : t.priority === 'low' ? '🟢' : '🟡';
-  const text = [
-    `${p} <b>${escapeHtml(String(t.priority || 'normal').toUpperCase())} · ${escapeHtml(ticketNo)}</b>`,
-    '━━━━━━━━━━━━━━━━━━',
-    `${d.icon} <b>${escapeHtml(d.title)}</b>`,
-    `${c.icon} ${escapeHtml(c.title)}`,
-    '',
-    `👤 <b>${escapeHtml(personName(u))}</b>`,
-    u?.username ? `🔗 @${escapeHtml(u.username)}` : null,
-    `🆔 Telegram: <code>${t.telegram_id}</code>`,
-    `🔐 Login/shartnoma: <code>${escapeHtml(t.account_login || '—')}</code>`,
-    `📍 Manzil: ${escapeHtml(t.address || '—')}`,
-    `📞 Telefon: <b>${escapeHtml(t.phone || '—')}</b>`,
-    '',
-    `📝 <b>${L(lang, 'Murojaat', 'Обращение')}:</b>`,
-    escapeHtml(t.description || '—')
-  ].filter(Boolean).join('\n');
-
-  let lastError = null;
-  for (const route of await candidateChats(env, t.department)) {
-    try {
-      // Fast path: try sending immediately. Avoid getMe + getChatMember before every ticket.
-      const sent = await sendMessage(env, route.chatId, text, { reply_markup: operatorKeyboard(ticketNo) });
-      await setSupportMessage(env, ticketNo, route.chatId, sent.message_id);
-      await deliveryDone(env, ticketNo);
-      chatReachability.set(String(route.chatId), { ok: true, at: Date.now() });
-      return true;
-    } catch (e) {
-      lastError = e;
-      chatReachability.set(String(route.chatId), { ok: false, at: Date.now() });
+  try {
+    const topic = await ensureTopicForTicket(env, ticketNo);
+    if (!topic?.thread_id) {
+      await enqueueDelivery(env, ticketNo, 'forum_topic_unavailable');
+      return false;
     }
+    await env.DB.prepare('UPDATE fn5_tickets SET support_chat_id=?,support_message_id=NULL,updated_at=CURRENT_TIMESTAMP WHERE ticket_no=?')
+      .bind(topic.chat_id, ticketNo).run();
+    await deliveryDone(env, ticketNo);
+    return true;
+  } catch (e) {
+    await enqueueDelivery(env, ticketNo, e);
+    return false;
   }
-  await enqueueDelivery(env, ticketNo, lastError || `No operator group configured for ${t.department}`);
-  return false;
 }
 
 async function flushDepartment(env, department) {
@@ -151,7 +128,7 @@ async function flushDepartment(env, department) {
 async function setupGroup(env, chat, department, userId) {
   await bindDepartment(env, department, chat.id, chat.title || null, userId || null);
   await sendMessage(env, chat.id,
-    `✅ <b>FiberNet bo‘lim guruhi ulandi</b>\n\n🎯 <b>${escapeHtml(departmentMeta(department, 'uz').title)}</b>\n🆔 <code>${chat.id}</code>\n\n⏳ Navbatdagi eski murojaatlar ham shu guruhga qayta yuboriladi.`);
+    `✅ <b>FiberNet bo‘lim guruhi ulandi</b>\n\n🎯 <b>${escapeHtml(departmentMeta(department, 'uz').title)}</b>\n🆔 <code>${chat.id}</code>\n\n🧵 Ochiq murojaatlar alohida Forum Topic sifatida tiklanadi. Asosiy chatga ticket tashlanmaydi.`);
   await flushDepartment(env, department);
 }
 
