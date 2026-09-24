@@ -3,7 +3,7 @@ import {
 } from './v5-db.js';
 import { getDepartmentByChat, getDepartmentChat } from './v7-routing.js';
 import { categoryMeta, departmentMeta, L, operatorName } from './v8-ui.js';
-import { escapeHtml, sendMessage, tg } from './telegram.js';
+import { escapeHtml, inlineKeyboard, sendMessage, tg } from './telegram.js';
 
 const now = () => new Date().toISOString();
 let ready = false;
@@ -107,6 +107,25 @@ async function routeChat(env, department) {
   if (bound?.chat_id) return bound.chat_id;
   const key = ENV_CHAT_KEYS[department] || 'SUPPORT_CHAT_ID';
   return env[key] || env.SUPPORT_CHAT_ID || null;
+}
+
+async function ticketTopic(env, ticketNo) {
+  try {
+    return await env.DB.prepare(`SELECT chat_id,thread_id,state FROM fn15_topics
+      WHERE ticket_no=? AND state='open'`).bind(ticketNo).first();
+  } catch {
+    return null;
+  }
+}
+
+async function sendTopicOnly(env, ticketNo, text, extra = {}) {
+  const topic = await ticketTopic(env, ticketNo);
+  if (!topic?.chat_id || !topic?.thread_id) return false;
+  await sendMessage(env, topic.chat_id, text, {
+    message_thread_id: topic.thread_id,
+    ...extra
+  });
+  return true;
 }
 
 async function ticketFromGroupMessage(env, msg) {
@@ -440,20 +459,20 @@ async function sendSlaAlerts(env) {
     const age = minutesSince(t.created_at);
     const threshold = SLA_MINUTES[t.priority] ?? SLA_MINUTES.normal;
     if (age < threshold) continue;
-    if (t.last_sla_alert_at && minutesSince(t.last_sla_alert_at) < Math.max(30, threshold)) continue;
-    const chatId = await routeChat(env, t.department);
-    if (!chatId) continue;
+    // One alert per ticket. Never flood the main group.
+    if (t.last_sla_alert_at) continue;
     try {
-      await sendMessage(env, chatId,
-        `⏰ <b>SLA ogohlantirish</b>\n${ticketShort(t)}\n🕒 <b>${age} min</b> qabul qilinmagan.\n\n👨‍💻 /next orqali navbatdagi ticketni oling.`);
+      const sent = await sendTopicOnly(env, t.ticket_no,
+        `⏰ <b>SLA</b> · ${age} min qabul qilinmagan.\n👨‍💻 Ticketni shu topic ichida qabul qiling.`);
+      if (!sent) continue;
       await ensureMeta(env, t.ticket_no);
       await env.DB.prepare('UPDATE fn13_ticket_meta SET last_sla_alert_at=?,updated_at=? WHERE ticket_no=?')
         .bind(now(), now(), t.ticket_no).run();
       if ((t.priority === 'critical' || t.priority === 'high') && age < threshold + 6) {
         const u = await getUser(env, t.telegram_id);
         await sendMessage(env, t.telegram_id, L(u?.language || 'uz',
-          `⏳ <b>Murojaatingiz navbatda</b>\n🎫 <code>${escapeHtml(t.ticket_no)}</code>\n\nMurojaat ustuvor navbatga ko‘tarildi. Operator qabul qilishi bilan sizga xabar keladi.`,
-          `⏳ <b>Ваше обращение в очереди</b>\n🎫 <code>${escapeHtml(t.ticket_no)}</code>\n\nОбращение повышено в приоритетной очереди. Мы сообщим, когда оператор его примет.`));
+          `⏳ <b>Murojaatingiz navbatda</b>\n🎫 <code>${escapeHtml(t.ticket_no)}</code>\n\nOperator qabul qilishi bilan sizga xabar keladi.`,
+          `⏳ <b>Ваше обращение в очереди</b>\n🎫 <code>${escapeHtml(t.ticket_no)}</code>\n\nМы сообщим, когда оператор примет обращение.`));
       }
     } catch (e) { console.warn('v13 SLA alert', String(e)); }
   }
@@ -469,8 +488,12 @@ async function remindWaitingCustomers(env) {
     try {
       const u = await getUser(env, t.telegram_id);
       await sendMessage(env, t.telegram_id, L(u?.language || 'uz',
-        `⏳ <b>Operator javobingizni kutmoqda</b>\n🎫 <code>${escapeHtml(t.ticket_no)}</code>\n\nAgar muammo davom etsa, shu botga oddiy xabar, rasm, video, voice yoki sticker yuboring.`,
-        `⏳ <b>Оператор ждёт ваш ответ</b>\n🎫 <code>${escapeHtml(t.ticket_no)}</code>\n\nЕсли проблема осталась, отправьте сюда сообщение, фото, видео, голосовое или стикер.`));
+        `⏳ <b>Operator javobingizni kutmoqda</b>\n🎫 <code>${escapeHtml(t.ticket_no)}</code>\n\nJavob yuborish uchun pastdagi tugmani bosing.`,
+        `⏳ <b>Оператор ждёт ваш ответ</b>\n🎫 <code>${escapeHtml(t.ticket_no)}</code>\n\nЧтобы ответить, нажмите кнопку ниже.`), {
+          reply_markup: inlineKeyboard([[
+            { text: L(u?.language || 'uz', '💬 Operatorga javob', '💬 Ответить оператору'), callback_data: `ticket:reply:${t.ticket_no}` }
+          ]])
+        });
       await ensureMeta(env, t.ticket_no);
       await env.DB.prepare('UPDATE fn13_ticket_meta SET last_waiting_reminder_at=?,updated_at=? WHERE ticket_no=?')
         .bind(now(), now(), t.ticket_no).run();
@@ -484,12 +507,20 @@ async function staleOperatorAlerts(env) {
     WHERE t.status='open' AND t.stage='in_progress' AND t.assigned_to IS NOT NULL
       AND datetime(t.updated_at)<=datetime('now','-60 minutes') LIMIT 60`).all();
   for (const t of r.results || []) {
-    if (t.last_stale_alert_at && minutesSince(t.last_stale_alert_at) < 120) continue;
-    const chatId = await routeChat(env, t.department);
-    if (!chatId) continue;
+    // Never repeat this reminder and never post it to the main group.
+    if (t.last_stale_alert_at) continue;
+    const age = minutesSince(t.updated_at);
+    // Very old legacy tickets should not suddenly flood topics after deploy.
+    if (age > 720) {
+      await ensureMeta(env, t.ticket_no);
+      await env.DB.prepare('UPDATE fn13_ticket_meta SET last_stale_alert_at=?,updated_at=? WHERE ticket_no=?')
+        .bind(now(), now(), t.ticket_no).run();
+      continue;
+    }
     try {
-      await sendMessage(env, chatId,
-        `🔔 <b>Ticket uzoq vaqt javobsiz</b>\n${ticketShort(t)}\n🕒 Oxirgi faollik: <b>${minutesSince(t.updated_at)} min</b> oldin.`);
+      const sent = await sendTopicOnly(env, t.ticket_no,
+        `🔔 <b>Eslatma</b> · Oxirgi faollik ${age} min oldin.\nAgar ish tugagan bo‘lsa ✅ Hal qilindi ni bosing.`);
+      if (!sent) continue;
       await ensureMeta(env, t.ticket_no);
       await env.DB.prepare('UPDATE fn13_ticket_meta SET last_stale_alert_at=?,updated_at=? WHERE ticket_no=?')
         .bind(now(), now(), t.ticket_no).run();
@@ -511,9 +542,6 @@ async function autoCloseResolved(env) {
       await sendMessage(env, t.telegram_id, L(u?.language || 'uz',
         `✅ <b>Murojaat avtomatik yopildi</b>\n🎫 <code>${escapeHtml(t.ticket_no)}</code>\n\n24 soat davomida qo‘shimcha muammo bo‘lmagani uchun ticket yopildi. Yangi muammo uchun /start.`,
         `✅ <b>Обращение автоматически закрыто</b>\n🎫 <code>${escapeHtml(t.ticket_no)}</code>\n\nЗа 24 часа новых сообщений не было. Для нового вопроса используйте /start.`));
-      if (t.support_chat_id) {
-        await sendMessage(env, t.support_chat_id, `🤖 <code>${escapeHtml(t.ticket_no)}</code> 24 soatdan keyin avtomatik yopildi.`);
-      }
       if (t.support_chat_id && t.support_message_id) {
         try { await tg(env, 'editMessageReplyMarkup', { chat_id: t.support_chat_id, message_id: t.support_message_id, reply_markup: { inline_keyboard: [] } }); } catch {}
       }
