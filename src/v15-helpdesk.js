@@ -246,13 +246,8 @@ function priorityIcon(priority) {
 
 function topicButtons(no) {
   return inlineKeyboard([
-    [{ text: '👨‍💻 Qabul qilish', callback_data: `op:claim:${no}` }, { text: '💬 Javob', callback_data: `op:reply:${no}` }],
-    [{ text: '⚡ Quick', callback_data: `v16:quick:${no}` }, { text: '❓ So‘rash', callback_data: `v16:askmenu:${no}` }],
-    [{ text: '📋 Context', callback_data: `v16:summary:${no}` }, { text: '👥 Operator', callback_data: `v17:assignmenu:${no}` }],
-    [{ text: '⏰ Snooze', callback_data: `v17:snoozemenu:${no}` }, { text: '🚦 Priority', callback_data: `v17:prioritymenu:${no}` }],
-    [{ text: '⏱ SLA', callback_data: `v17:sla:${no}` }, { text: '⏳ Kutish', callback_data: `op:wait:${no}` }],
-    [{ text: '↗️ Boshqa bo‘lim', callback_data: `op:transfer:${no}` }, { text: '✅ Hal qilindi', callback_data: `op:resolve:${no}` }],
-    [{ text: '❌ Yopish', callback_data: `op:close:${no}` }]
+    [{ text: '👨‍💻 Qabul qilish', callback_data: `op:claim:${no}` }, { text: '✅ Hal qilindi', callback_data: `op:resolve:${no}` }],
+    [{ text: '↗️ Boshqa bo‘lim', callback_data: `op:transfer:${no}` }, { text: '❌ Yopish', callback_data: `op:close:${no}` }]
   ]);
 }
 
@@ -286,8 +281,8 @@ async function topicHeader(env, t) {
     '',
     `📝 ${escapeHtml(t.description || '—')}`,
     '',
-    '💡 Topic ichida oddiy xabar/media yuborsangiz mijozga boradi.',
-    '⚙️ /claim · /assign · /snooze · /sla · /tag · /undo · /quick · /ask · /summary · /operatorhelp'
+    '💬 Shu topic ichida oddiy xabar/media yuboring — mijozga boradi.',
+    '🔒 Ichki izoh uchun xabarni // bilan boshlang. Qo‘shimcha funksiyalar: /operatorhelp'
   ].filter(Boolean).join('\n');
 }
 
