@@ -24,6 +24,7 @@ import {
   getDepartmentChat, getOperatorReplySession, listDepartmentChats, releaseV7Update,
   setOperatorReplySession, unbindDepartment
 } from './v7-routing.js';
+import { ensureTopicForTicket } from './v15-helpdesk.js';
 
 const VERSION = '8.0.0';
 const BOT_NAME = 'FiberNet Assistant';
@@ -231,7 +232,23 @@ async function deliverTicket(env,no){
   const text=[`${p} <b>${escapeHtml(t.priority.toUpperCase())} · ${escapeHtml(no)}</b>`,'━━━━━━━━━━━━━━━━━━',`${d.icon} <b>${escapeHtml(d.title)}</b>`,`${c.icon} ${escapeHtml(c.title)}`,'',`👤 <b>${escapeHtml(nameOf(u))}</b>`,u?.username?`🔗 @${escapeHtml(u.username)}`:null,`🆔 Telegram: <code>${t.telegram_id}</code>`,`🔐 Login/shartnoma: <code>${escapeHtml(t.account_login||'—')}</code>`,`📍 Manzil: ${escapeHtml(t.address||'—')}`,`📞 Telefon: <b>${escapeHtml(t.phone||'—')}</b>`,'',`📝 <b>${L(lang,'Murojaat','Обращение')}:</b>`,escapeHtml(t.description||'—'),'','1️⃣ Qabul qilish → 2️⃣ Javob berish → 3️⃣ Guruhga javob yozish'].filter(Boolean).join('\n');
   const sent=await sendMessage(env,route.chatId,text,{reply_markup:operatorKeyboard(no)});await setSupportMessage(env,no,route.chatId,sent.message_id);await deliveryDone(env,no);return{chatId:route.chatId,messageId:sent.message_id};
 }
-async function safeDeliver(env,no){try{await deliverTicket(env,no);return true}catch(e){await enqueueDelivery(env,no,e);console.error('v8 queued',{no,error:String(e)});return false}}
+async function safeDeliver(env,no){
+  try{
+    const topic=await ensureTopicForTicket(env,no);
+    if(topic?.thread_id){
+      await env.DB.prepare('UPDATE fn5_tickets SET support_chat_id=?,support_message_id=NULL,updated_at=CURRENT_TIMESTAMP WHERE ticket_no=?')
+        .bind(topic.chat_id,no).run();
+      await deliveryDone(env,no);
+      return true;
+    }
+    await enqueueDelivery(env,no,'forum_topic_unavailable');
+    return false;
+  }catch(e){
+    await enqueueDelivery(env,no,e);
+    console.error('v8 topic queued',{no,error:String(e)});
+    return false;
+  }
+}
 
 async function createGuidedTicket(env,msg,user,data,extra=''){
   const lang=user.language||'uz',c=categoryMeta(data.category,lang),typeLine=data.entityType&&data.entityType!=='none'?`${L(lang,'Mijoz turi','Тип клиента')}: ${entityTypeLabel(data.entityType,lang)}\n`:'';
@@ -338,7 +355,23 @@ async function processUpdate(env,u){
   if(!await claimV7Update(env,u.update_id))return;try{if(u.callback_query){if(isGroupChat(u.callback_query.message?.chat))await operatorCallback(env,u.callback_query);else await privateCallback(env,u.callback_query);}else if(u.message){if(isPrivateChat(u.message.chat))await privateMessage(env,u.message);else if(isGroupChat(u.message.chat))await groupMessage(env,u.message);}}catch(e){await releaseV7Update(env,u.update_id);throw e;}
 }
 
-async function retryDeliveries(env){const rows=await pendingDeliveries(env,30);for(const x of rows){try{await deliverTicket(env,x.ticket_no);await deliveryDone(env,x.ticket_no);}catch(e){await deliveryFailed(env,x.ticket_no,e);}}}
+async function retryDeliveries(env){
+  const rows=await pendingDeliveries(env,30);
+  for(const x of rows){
+    try{
+      const t=await getTicket(env,x.ticket_no);
+      if(!t||t.status!=='open'){await deliveryDone(env,x.ticket_no);continue;}
+      const topic=await ensureTopicForTicket(env,x.ticket_no);
+      if(topic?.thread_id){
+        await env.DB.prepare('UPDATE fn5_tickets SET support_chat_id=?,support_message_id=NULL,updated_at=CURRENT_TIMESTAMP WHERE ticket_no=?')
+          .bind(topic.chat_id,x.ticket_no).run();
+        await deliveryDone(env,x.ticket_no);
+      }else{
+        await deliveryFailed(env,x.ticket_no,'forum_topic_unavailable');
+      }
+    }catch(e){await deliveryFailed(env,x.ticket_no,e);}
+  }
+}
 
 export default {
   async fetch(req,env){const url=new URL(req.url);if(req.method==='POST'&&url.pathname==='/telegram/webhook'){if(!env.TELEGRAM_WEBHOOK_SECRET||req.headers.get('X-Telegram-Bot-Api-Secret-Token')!==env.TELEGRAM_WEBHOOK_SECRET)return new Response('Unauthorized',{status:401});let u;try{u=await req.json()}catch{return new Response('Bad Request',{status:400})}if(!Number.isInteger(u.update_id))return new Response('ok');try{await ensureV5Schema(env);await ensureV7Routing(env);await processUpdate(env,u);return new Response('ok')}catch(e){console.error('FiberNet v8 webhook error',{error:String(e),stack:e?.stack});return new Response('Retry',{status:500})}}
