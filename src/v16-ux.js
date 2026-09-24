@@ -372,20 +372,18 @@ async function deliverNewTicket(env, no) {
   try {
     const topic = await ensureTopicForTicket(env, no);
     if (topic?.thread_id) {
-      await env.DB.prepare('UPDATE fn5_tickets SET support_chat_id=?,updated_at=? WHERE ticket_no=?')
+      await env.DB.prepare('UPDATE fn5_tickets SET support_chat_id=?,support_message_id=NULL,updated_at=? WHERE ticket_no=?')
         .bind(topic.chat_id, now(), no).run();
       await deliveryDone(env, no);
       return { mode: 'topic', chatId: topic.chat_id, threadId: topic.thread_id };
     }
   } catch (e) {
-    console.warn('v16 forum delivery fallback', String(e));
+    console.warn('v16 forum delivery pending', String(e));
   }
-  try {
-    return await fallbackDeliver(env, no);
-  } catch (e) {
-    await enqueueDelivery(env, no, e);
-    return { mode: 'queue', error: String(e) };
-  }
+
+  // Strict topic-only policy: never dump a customer ticket into the group's
+  // main chat. Maintenance will retry creating the dedicated forum topic.
+  return { mode: 'topic_pending', error: 'forum_topic_unavailable' };
 }
 
 async function event(env, no, actorType, actorId, name, data = null) {
@@ -479,8 +477,8 @@ export async function createExpressTicket(env, msg, user, data, forceNew = false
     ? `\n👨‍💻 ${L(lang,'Operator','Оператор')}: <b>${escapeHtml(fresh.assigned_name)}</b>`
     : '';
   await sendMessage(env, msg.chat.id, L(lang,
-    `✅ <b>Murojaat yuborildi</b>\n\n🎫 <code>${no}</code>\n${cat.icon} ${escapeHtml(cat.title)}${assigned}\n\n${delivery.mode === 'queue' ? '⏳ Murojaat saqlandi. Yetkazish avtomatik qayta urinadi.' : '🚀 Kerakli mutaxassis navbatiga yuborildi.'}\n\nEndi shu chatga oddiy xabar, rasm, video, voice yoki sticker yuborsangiz ticketga qo‘shiladi.`,
-    `✅ <b>Обращение отправлено</b>\n\n🎫 <code>${no}</code>\n${cat.icon} ${escapeHtml(cat.title)}${assigned}\n\n${delivery.mode === 'queue' ? '⏳ Обращение сохранено. Доставка будет повторена автоматически.' : '🚀 Обращение направлено нужному специалисту.'}\n\nТеперь обычный текст, фото, видео, голосовое или стикер в этом чате добавится в обращение.`));
+    `✅ <b>Murojaat yuborildi</b>\n\n🎫 <code>${no}</code>\n${cat.icon} ${escapeHtml(cat.title)}${assigned}\n\n${delivery.mode === 'topic_pending' ? '⏳ Murojaat saqlandi. Alohida operator mavzusi ochilishi avtomatik qayta urinadi.' : '🚀 Kerakli mutaxassisning alohida mavzusiga yuborildi.'}\n\nEndi shu chatga oddiy xabar, rasm, video, voice yoki sticker yuborsangiz ticketga qo‘shiladi.`,
+    `✅ <b>Обращение отправлено</b>\n\n🎫 <code>${no}</code>\n${cat.icon} ${escapeHtml(cat.title)}${assigned}\n\n${delivery.mode === 'topic_pending' ? '⏳ Обращение сохранено. Создание отдельной темы будет повторено автоматически.' : '🚀 Обращение отправлено в отдельную тему нужного специалиста.'}\n\nТеперь обычный текст, фото, видео, голосовое или стикер в этом чате добавится в обращение.`));
   return no;
 }
 
