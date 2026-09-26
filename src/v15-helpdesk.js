@@ -267,22 +267,19 @@ async function topicHeader(env, t) {
   const c = categoryMeta(t.category, lang);
   const access = a?.access_type ? accessLabel(a.access_type, lang) : L(lang, 'Ko‘rsatilmagan', 'Не указано');
   return [
-    `${priorityIcon(t.priority)} <b>${escapeHtml(t.ticket_no)}</b>`,
-    `${d.icon} <b>${escapeHtml(d.title)}</b> · ${c.icon} ${escapeHtml(c.title)}`,
-    `🌐 ${escapeHtml(access)}`,
-    t.assigned_name ? `👨‍💻 ${escapeHtml(t.assigned_name)}` : '👨‍💻 Unassigned',
+    `${priorityIcon(t.priority)} <b>${escapeHtml(t.ticket_no)}</b> · ${d.icon} ${escapeHtml(d.title)}`,
+    `${c.icon} <b>${escapeHtml(c.title)}</b> · 🌐 ${escapeHtml(access)}`,
     '',
-    verifiedName ? `✅ <b>${escapeHtml(verifiedName)}</b> · tasdiqlangan profil`
+    verifiedName ? `✅ <b>${escapeHtml(verifiedName)}</b>`
       : `👤 <b>${escapeHtml([u?.first_name, u?.last_name].filter(Boolean).join(' ') || String(t.telegram_id))}</b>`,
-    u?.username ? `🔗 @${escapeHtml(u.username)}` : null,
-    `🔐 <code>${escapeHtml(t.account_login || '—')}</code>`,
+    `🔐 <code>${escapeHtml(t.account_login || '—')}</code> · 📞 ${escapeHtml(t.phone || '—')}`,
     `📍 ${escapeHtml(t.address || '—')}`,
-    `📞 ${escapeHtml(t.phone || '—')}`,
     '',
     `📝 ${escapeHtml(t.description || '—')}`,
     '',
-    '💬 Shu topic ichida oddiy xabar/media yuboring — mijozga boradi.',
-    '🔒 Ichki izoh uchun xabarni // bilan boshlang. Qo‘shimcha funksiyalar: /operatorhelp'
+    t.assigned_name ? `👨‍💻 Operator: <b>${escapeHtml(t.assigned_name)}</b>` : '⏳ Operator kutilmoqda · odatda 5–15 daqiqa',
+    '💬 Topic ichida yozing — xabar abonentga boradi.',
+    '🔒 Ichki izoh: <code>// izoh</code> · yordam: <code>/operatorhelp</code>'
   ].filter(Boolean).join('\n');
 }
 
