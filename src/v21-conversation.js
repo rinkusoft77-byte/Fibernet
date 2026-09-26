@@ -197,6 +197,11 @@ export async function activateSupportConversation(env, ticketNo, state = 'waitin
   const t = await getTicket(env,ticketNo);
   if (!t || t.status !== 'open') return null;
   const topic = await topicForDelivery(env,ticketNo);
+  // A customer can actively chat in only one ticket at a time. Older open
+  // tickets stay open, but their live-chat routing is paused until explicitly resumed.
+  await env.DB.prepare(`UPDATE fn21_conversations SET state='paused',paused_at=?,updated_at=?
+    WHERE telegram_id=? AND ticket_no!=? AND state IN ('waiting_operator','active','engaged')`)
+    .bind(now(),now(),t.telegram_id,ticketNo).run();
   await env.DB.prepare(`INSERT INTO fn21_conversations(
     ticket_no,telegram_id,state,support_chat_id,thread_id,activated_at,updated_at,closed_at,paused_at
   ) VALUES(?,?,?,?,?,?,?,NULL,NULL)
@@ -375,11 +380,15 @@ export async function handleV21Update(env,update){
       if(!await claimUpdate(env,update.update_id)) return true;
       return resumeCallback(env,q,data.slice('ticket:reply:'.length));
     }
+    // Any normal menu/button navigation pauses live operator routing. This
+    // prevents profile/tariff/menu actions from being interpreted as support chat.
+    const active=await conversationByUser(env,q.from.id);
+    if(active) await pauseConversation(env,q.from.id);
   }
 
   const msg=update?.message;
   if(!msg || msg.from?.is_bot || !isPrivate(msg.chat)) return false;
-  const text=String(msg.text||'').trim();
+  const text=String(msg.text||msg.caption||'').trim();
 
   if(/^\/(start|menu)(?:@\w+)?(?:\s|$)/i.test(text)){
     await pauseConversation(env,msg.from.id);
