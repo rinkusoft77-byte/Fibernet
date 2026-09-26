@@ -11,6 +11,7 @@ import {
 } from './v8-ui.js';
 import { __test as v14Test, accessLabel, getAccess } from './v14-access.js';
 import { ensureTopicForTicket } from './v15-helpdesk.js';
+import { activateSupportConversation } from './v21-conversation.js';
 import {
   answerCallback, escapeHtml, inlineKeyboard, sendMessage, tg
 } from './telegram.js';
@@ -469,6 +470,7 @@ export async function createExpressTicket(env, msg, user, data, forceNew = false
   });
 
   const delivery = await deliverNewTicket(env, no);
+  await activateSupportConversation(env, no, 'waiting_operator');
   const fresh = await getTicket(env, no);
   await setUserLive(env, user.telegram_id, no);
   await event(env, no, 'user', user.telegram_id, 'ux_express_created', { delivery: delivery.mode });
@@ -477,8 +479,8 @@ export async function createExpressTicket(env, msg, user, data, forceNew = false
     ? `\n👨‍💻 ${L(lang,'Operator','Оператор')}: <b>${escapeHtml(fresh.assigned_name)}</b>`
     : '';
   await sendMessage(env, msg.chat.id, L(lang,
-    `✅ <b>Murojaat yuborildi</b>\n\n🎫 <code>${no}</code>\n${cat.icon} ${escapeHtml(cat.title)}${assigned}\n\n${delivery.mode === 'topic_pending' ? '⏳ Murojaat saqlandi. Alohida operator mavzusi ochilishi avtomatik qayta urinadi.' : '🚀 Kerakli mutaxassisning alohida mavzusiga yuborildi.'}\n\nEndi shu chatga oddiy xabar, rasm, video, voice yoki sticker yuborsangiz ticketga qo‘shiladi.`,
-    `✅ <b>Обращение отправлено</b>\n\n🎫 <code>${no}</code>\n${cat.icon} ${escapeHtml(cat.title)}${assigned}\n\n${delivery.mode === 'topic_pending' ? '⏳ Обращение сохранено. Создание отдельной темы будет повторено автоматически.' : '🚀 Обращение отправлено в отдельную тему нужного специалиста.'}\n\nТеперь обычный текст, фото, видео, голосовое или стикер в этом чате добавится в обращение.`));
+    `✅ <b>Operatorga ulanish boshlandi</b>\n\n🎫 <code>${no}</code>\n${cat.icon} ${escapeHtml(cat.title)}${assigned}\n\n⏱ <b>Taxminiy javob vaqti: 5–15 daqiqa</b>\n\n${delivery.mode === 'topic_pending' ? '⏳ Murojaat saqlandi, alohida operator Topic’i tiklanmoqda.' : '🧵 Siz uchun alohida operator Topic’i tayyor.'}\n\n💬 Endi shu chatga yozgan text, rasm, video, voice, sticker va fayllaringiz <b>faqat shu murojaat Topic’iga</b> boradi. Operator ham faqat shu Topic ichida javob beradi va javobi sizga shu botda keladi.\n\n🏠 Menyuga qaytish uchun /start yuboring.`,
+    `✅ <b>Подключение к оператору началось</b>\n\n🎫 <code>${no}</code>\n${cat.icon} ${escapeHtml(cat.title)}${assigned}\n\n⏱ <b>Ожидаемое время ответа: 5–15 минут</b>\n\n${delivery.mode === 'topic_pending' ? '⏳ Обращение сохранено, отдельный Topic оператора восстанавливается.' : '🧵 Для обращения создан отдельный Topic.'}\n\n💬 Теперь текст, фото, видео, голосовые, стикеры и файлы из этого чата будут попадать <b>только в Topic этого обращения</b>. Оператор отвечает только в этом Topic, а ответ приходит вам сюда в бот.\n\n🏠 Чтобы вернуться в меню, отправьте /start.`));
   return no;
 }
 
