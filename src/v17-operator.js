@@ -4,6 +4,7 @@ import {
 import { getDepartmentByChat } from './v7-routing.js';
 import { L, operatorName } from './v8-ui.js';
 import { ensureTopicForTicket } from './v15-helpdesk.js';
+import { markOperatorActivity } from './v21-conversation.js';
 import { answerCallback, escapeHtml, inlineKeyboard, sendMessage, tg } from './telegram.js';
 
 const now = () => new Date().toISOString();
@@ -324,6 +325,7 @@ async function operatorRelay(env, msg, t) {
   await addMessage(env, t.ticket_no, 'operator', msg.from.id, bodyOf(msg) || `[${relayKind(msg)}]`, msg.message_id);
   await setStage(env, t.ticket_no, 'waiting_customer', { id: msg.from.id, name: operatorName(msg.from) });
   await setUserLive(env, t.telegram_id, t.ticket_no);
+  await markOperatorActivity(env, t.ticket_no);
   await logEvent(env, t.ticket_no, msg.from.id, 'reply', { kind: relayKind(msg), quoted: Boolean(replyTo) });
   try {
     await tg(env, 'setMessageReaction', {
