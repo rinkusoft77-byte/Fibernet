@@ -1,5 +1,5 @@
 import { MEDIA } from './config.js';
-import { getUser, upsertUser } from './v5-db.js';
+import { clearSession, getUser, upsertUser } from './v5-db.js';
 import { L } from './v8-ui.js';
 import {
   answerCallback, escapeHtml, inlineKeyboard, sendChatAction, sendMessage, sendPhoto
@@ -371,6 +371,9 @@ export async function handleV22ContentUpdate(env, update) {
 
   const fn = actions[data];
   if (!fn) return false;
+  if (data === 'home:main' || data === 'v18:continue') {
+    await clearSession(env, user.telegram_id);
+  }
   await answerCallback(env, q.id);
   await fn();
   return true;
