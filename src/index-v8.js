@@ -25,6 +25,10 @@ import {
   setOperatorReplySession, unbindDepartment
 } from './v7-routing.js';
 import { ensureTopicForTicket } from './v15-helpdesk.js';
+import {
+  showPremiumAbout, showPremiumContacts, showPremiumHome, showPremiumPromo,
+  showPremiumSupport, showPremiumTariffs, showPremiumTV
+} from './v22-content.js';
 
 const VERSION = '8.0.0';
 const BOT_NAME = 'FiberNet Assistant';
@@ -121,16 +125,11 @@ function diagnosticText(lang, department, type, category) {
 }
 
 async function showHome(env, chatId, lang) {
-  const caption = L(lang,
-    `⚡️ <b>${BOT_NAME}</b>\n\nFiberNet xizmatlari bir joyda. Avval <b>Bo‘limlar</b>ga kiring, muammo turini tanlang va bot ko‘rsatgan tekshiruvlarni bajaring. Faqat yechim bo‘lmasa operatorga murojaat ochiladi.\n\n👇 Kerakli bo‘limni tanlang:`,
-    `⚡️ <b>${BOT_NAME}</b>\n\nСервисы FiberNet в одном месте. Откройте <b>Отделы</b>, выберите проблему и выполните подсказки. Обращение оператору открывается только если решение не помогло.\n\n👇 Выберите раздел:`);
-  return card(env, chatId, MEDIA.homeBanner, caption, homeKeyboard(lang));
+  return showPremiumHome(env, chatId, lang);
 }
 
 function showDepartments(env, chatId, lang) {
-  return sendMessage(env, chatId, L(lang,
-    '🏢 <b>FiberNet bo‘limlari</b>\n\nMuammo yoki xizmat turiga mos bo‘limni tanlang:',
-    '🏢 <b>Отделы FiberNet</b>\n\nВыберите отдел по типу вопроса:'), { reply_markup: departmentsKeyboard(lang) });
+  return showPremiumSupport(env, chatId, lang);
 }
 
 function showDepartment(env, chatId, lang, department, suggested='other') {
@@ -158,10 +157,7 @@ async function showIssue(env, chatId, lang, department, type, category) {
 }
 
 async function showTariffMenu(env, chatId, lang) {
-  return sendMessage(env, chatId, L(lang, '📶 <b>Tariflar</b>\n\nTarif seriyasini tanlang:', '📶 <b>Тарифы</b>\n\nВыберите серию:'), { reply_markup: inlineKeyboard([
-    [{ text:'⚡ TEZKOR', callback_data:'tariff:tezkor:0' }, { text:'🌐 OnLine', callback_data:'tariff:online:0' }],
-    [{ text:L(lang,'🏠 Bosh menyu','🏠 Главное меню'), callback_data:'home:main' }]
-  ]) });
+  return showPremiumTariffs(env, chatId, lang);
 }
 
 async function showTariffs(env, chatId, lang, series, page=0) {
@@ -176,24 +172,19 @@ async function showTariffs(env, chatId, lang, series, page=0) {
 }
 
 function showTV(env, chatId, lang) {
-  return sendMessage(env, chatId, L(lang,
-    '📺 <b>HopHop TV</b>\n\nFiberNet interaktiv TV xizmati. TEZKOR tariflarida 170+ kanal ko‘rsatilgan. TV ishlamasa: 🏢 Bo‘limlar → 🛠 Texnik yordam → mijoz turi → 📺 IPTV/HopHop yo‘lidan kiring.',
-    '📺 <b>HopHop TV</b>\n\nИнтерактивное ТВ FiberNet. В тарифах TEZKOR указано 170+ каналов. Если ТВ не работает: 🏢 Отделы → 🛠 Техподдержка → тип клиента → 📺 IPTV/HopHop.'), { reply_markup:inlineKeyboard([[{text:L(lang,'🏢 Bo‘limlar','🏢 Отделы'),callback_data:'home:departments'}],[{text:L(lang,'🏠 Bosh menyu','🏠 Главное меню'),callback_data:'home:main'}]]) });
+  return showPremiumTV(env, chatId, lang);
 }
 
 function showAbout(env, chatId, lang) {
-  return sendMessage(env, chatId, L(lang,
-    'ℹ️ <b>FiberNet / NET TELEVISION</b>\n\n🌐 Optik internet\n📺 IPTV / HopHop TV\n📶 TEZKOR va OnLine tariflari\n🛠 Texnik yordam\n💳 Buxgalteriya\n👥 Abonent bo‘limi\n🔌 Yangi ulanish\n\n🔐 Bot hech qachon kabinet parolini so‘ramaydi.',
-    'ℹ️ <b>FiberNet / NET TELEVISION</b>\n\n🌐 Оптический интернет\n📺 IPTV / HopHop TV\n📶 Тарифы TEZKOR и OnLine\n🛠 Техподдержка\n💳 Бухгалтерия\n👥 Абонентский отдел\n🔌 Подключение\n\n🔐 Бот никогда не запрашивает пароль кабинета.'), { reply_markup:homeKeyboard(lang) });
+  return showPremiumAbout(env, chatId, lang);
 }
 
 function showContacts(env, chatId, lang) {
-  return sendMessage(env, chatId, [`☎️ <b>${L(lang,'FiberNet aloqa','Контакты FiberNet')}</b>`,'',`📞 <b>${CONTACTS.phone}</b>`,`🧑‍💻 ${CONTACTS.supportEmail}`,`📧 ${CONTACTS.infoEmail}`,`💳 ${CONTACTS.financeEmail}`,`📍 ${escapeHtml(lang==='ru'?CONTACTS.addressRu:CONTACTS.addressUz)}`].join('\n'), { reply_markup:homeKeyboard(lang) });
+  return showPremiumContacts(env, chatId, lang);
 }
 
 async function showPromo(env, chatId, lang) {
-  const cap=L(lang,'🎁 <b>FiberNet aksiyalari</b>\n\nAmaldagi aksiya ma’lumotlari. Savol bo‘lsa Bo‘limlar → Abonent bo‘limi orqali kerakli mavzuni tanlang.','🎁 <b>Акции FiberNet</b>\n\nИнформация об акциях. Для вопроса: Отделы → Абонентский отдел.');
-  return card(env,chatId,lang==='ru'?MEDIA.promoRu:MEDIA.promoUz,cap,inlineKeyboard([[{text:L(lang,'🏢 Bo‘limlar','🏢 Отделы'),callback_data:'home:departments'}],[{text:L(lang,'🏠 Bosh menyu','🏠 Главное меню'),callback_data:'home:main'}]]));
+  return showPremiumPromo(env, chatId, lang);
 }
 
 async function showProfile(env, chatId, user) {
