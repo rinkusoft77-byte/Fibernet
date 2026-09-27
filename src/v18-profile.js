@@ -4,6 +4,7 @@ import {
 import { createExpressTicket } from './v16-ux.js';
 import { categoryMeta, homeKeyboard, L, languageKeyboard } from './v8-ui.js';
 import { answerCallback, escapeHtml, inlineKeyboard, sendMessage } from './telegram.js';
+import { showPremiumHome } from './v22-content.js';
 
 const now = () => new Date().toISOString();
 let ready = false;
@@ -115,18 +116,7 @@ function profileGateKeyboard(lang, profile) {
 
 async function showHome(env, chatId, user) {
   const lang = user?.language === 'ru' ? 'ru' : 'uz';
-  const p = await getClientProfile(env, user.telegram_id);
-  const badge = p?.status === 'approved'
-    ? L(lang, '✅ Tasdiqlangan mijoz', '✅ Подтверждённый клиент')
-    : p?.status === 'pending'
-      ? L(lang, '⏳ Profil tekshiruvda', '⏳ Профиль на проверке')
-      : L(lang, 'ℹ️ Profil tasdiqlanmagan', 'ℹ️ Профиль не подтверждён');
-  return sendMessage(env, chatId, [
-    '🌐 <b>FiberNet Assistant</b>',
-    badge,
-    '',
-    L(lang, 'Kerakli xizmatni tanlang:', 'Выберите нужный раздел:')
-  ].join('\n'), { reply_markup: homeKeyboard(lang) });
+  return showPremiumHome(env, chatId, lang);
 }
 
 async function showProfileGate(env, chatId, user) {
