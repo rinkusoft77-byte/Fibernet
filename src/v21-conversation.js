@@ -3,6 +3,7 @@ import {
 } from './v5-db.js';
 import { ensureTopicForTicket } from './v15-helpdesk.js';
 import { L } from './v8-ui.js';
+import { getNumberSetting } from './v23-store.js';
 import { answerCallback, escapeHtml, sendMessage, tg } from './telegram.js';
 
 const now = () => new Date().toISOString();
@@ -345,18 +346,20 @@ async function retryOutbox(env) {
 
 async function waitingReminders(env) {
   await ensureV21Schema(env);
+  const wait=Math.max(5,Math.min(120,await getNumberSetting(env,'support.wait_minutes',15)));
+  const modifier=`-${wait} minutes`;
   const r=await env.DB.prepare(`SELECT c.*,t.assigned_to,t.status,t.stage
     FROM fn21_conversations c JOIN fn5_tickets t ON t.ticket_no=c.ticket_no
     WHERE c.state='waiting_operator' AND t.status='open' AND t.assigned_to IS NULL
       AND c.wait_reminder_at IS NULL
-      AND datetime(c.activated_at)<=datetime('now','-12 minutes')
-    LIMIT 30`).all();
+      AND datetime(c.activated_at)<=datetime('now',?)
+    LIMIT 30`).bind(modifier).all();
   for(const c of r.results || []){
     const topic=await topicForDelivery(env,c.ticket_no);
     if(!topic?.thread_id) continue;
     try{
       await sendMessage(env,topic.chat_id,
-        `⏰ <b>Mijoz kutmoqda</b> · <code>${escapeHtml(c.ticket_no)}</code>\n12+ daqiqa bo‘ldi. Birinchi bo‘sh operator ticketni qabul qilsin.`,
+        `⏰ <b>Mijoz kutmoqda</b> · <code>${escapeHtml(c.ticket_no)}</code>\n${wait}+ daqiqa bo‘ldi. Birinchi bo‘sh operator ticketni qabul qilsin.`,
         {message_thread_id:topic.thread_id});
       await env.DB.prepare('UPDATE fn21_conversations SET wait_reminder_at=?,updated_at=? WHERE ticket_no=?')
         .bind(now(),now(),c.ticket_no).run();
@@ -423,7 +426,7 @@ export async function v21Health(env){
     active_chats:Number(active?.n||0),
     waiting_operator:Number(waiting?.n||0),
     pending_messages:Number(outbox?.n||0),
-    advertised_wait:'5-15 minutes'
+    advertised_wait:`5-${Math.max(5,Math.min(120,await getNumberSetting(env,'support.wait_minutes',15)))} minutes`
   };
 }
 
