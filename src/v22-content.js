@@ -315,6 +315,24 @@ export async function showPremiumAbout(env, chatId, lang) {
   return premiumCard(env, chatId, { key:'about', photo:ART.home, caption, keyboard });
 }
 
+export async function showPremiumGuides(env, chatId, lang) {
+  const caption = L(lang,
+    '📚 <b>Rasmiy qo‘llanmalar</b>\n\nMuammoni mustaqil tekshirish uchun FiberNet’ning rasmiy sahifalaridan foydalaning.\n\n⚙️ Tarmoq va xizmat sozlamalari\n📈 Tezlik testi\n👤 Shaxsiy kabinet\n💳 To‘lov yo‘riqnomasi\n\n🔐 Parol yoki SMS kodini botga yubormang.',
+    '📚 <b>Официальные инструкции</b>\n\nДля самостоятельной проверки используйте официальные страницы FiberNet.\n\n⚙️ Настройки сети и услуг\n📈 Тест скорости\n👤 Личный кабинет\n💳 Инструкция по оплате\n\n🔐 Не отправляйте боту пароль или SMS‑код.');
+  return premiumCard(env, chatId, {
+    key:'guides',
+    photo:ART.support,
+    caption,
+    keyboard:inlineKeyboard([
+      [{ text:L(lang,'⚙️ Sozlamalar','⚙️ Настройки'), url:settings(lang) }],
+      [{ text:'📈 Speedtest', url:speed(lang) }],
+      [{ text:L(lang,'👤 Shaxsiy kabinet','👤 Личный кабинет'), url:OFFICIAL.cabinet }],
+      [{ text:L(lang,'💳 To‘lov yo‘riqnomasi','💳 Инструкция по оплате'), url:payments(lang) }],
+      [{ text:L(lang,'🛠 Yordam markazi','🛠 Центр помощи'), callback_data:'home:departments' }]
+    ])
+  });
+}
+
 export async function showPremiumNews(env, chatId, lang) {
   const caption = L(lang,
     '📰 <b>Yangiliklar va texnik ogohlantirishlar</b>\n\nRejalashtirilgan texnik ishlar, ofis ish vaqti, yangi tariflar va aksiyalarni rasmiy FiberNet manbalaridan kuzating.',
@@ -365,6 +383,7 @@ export async function handleV22ContentUpdate(env, update) {
     'v22:connect': () => showPremiumConnect(env, q.message.chat.id, lang),
     'v22:services': () => showPremiumServices(env, q.message.chat.id, lang),
     'v22:news': () => showPremiumNews(env, q.message.chat.id, lang),
+    'v22:guides': () => showPremiumGuides(env, q.message.chat.id, lang),
     'v22:sources': () => showSources(env, q.message.chat.id, lang),
     'v18:continue': () => showPremiumHome(env, q.message.chat.id, lang)
   };
