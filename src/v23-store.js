@@ -76,6 +76,23 @@ export async function getSetting(env, key, fallback = null) {
   return row?.setting_value ?? fallback;
 }
 
+export async function getSettingsMap(env, defaults = {}) {
+  await ensureV23Store(env);
+  const entries = Object.entries(defaults);
+  if (!entries.length) return {};
+  const statements = entries.map(([key]) =>
+    env.DB.prepare('SELECT setting_value FROM fn23_settings WHERE setting_key=?').bind(key)
+  );
+  const rows = await env.DB.batch(statements);
+  const out = {};
+  for (let i = 0; i < entries.length; i++) {
+    const [key, fallback] = entries[i];
+    const first = rows[i]?.results?.[0] || rows[i]?.result?.[0] || null;
+    out[key] = first?.setting_value ?? fallback;
+  }
+  return out;
+}
+
 export async function getNumberSetting(env, key, fallback) {
   const v = Number(await getSetting(env, key, fallback));
   return Number.isFinite(v) ? v : fallback;
