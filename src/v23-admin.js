@@ -711,6 +711,11 @@ async function handleAdminMessage(env,msg){
   if(!isBotAdmin(env,msg.from.id)) return false;
   const session=await getAdminSession(env,msg.from.id);
   if(!session) return false;
+  if(text.startsWith('/') &&
+      !/^\/(cancel|reset|undo)(?:@\w+)?$/i.test(text)){
+    await clearAdminSession(env,msg.from.id);
+    return false;
+  }
   return handleSessionMessage(env,msg,session);
 }
 
