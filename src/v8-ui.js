@@ -175,6 +175,7 @@ export const connectionIssuesKeyboard = lang => inlineKeyboard([
 export const diagnosticKeyboard = (department, type, category, lang) => inlineKeyboard([
   [{ text: L(lang, '✅ Muammo hal bo‘ldi', '✅ Проблема решена'), callback_data: 'home:main' }],
   [{ text: L(lang, '👨‍💻 Operatorga murojaat', '👨‍💻 Обратиться к оператору'), callback_data: `assist:${department}:${type}:${category}` }],
+  [{ text: L(lang, '📚 Rasmiy qo‘llanmalar', '📚 Официальные инструкции'), callback_data: 'v22:guides' }],
   [{ text: L(lang, '⬅️ Orqaga', '⬅️ Назад'), callback_data: department === 'tech' ? `type:tech:${type}:other` : department === 'subscriber' ? `type:subscriber:${type}:other` : `dept:${department}` }]
 ]);
 
