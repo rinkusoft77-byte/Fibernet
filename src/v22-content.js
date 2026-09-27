@@ -22,7 +22,7 @@ export const OFFICIAL = {
   onlineRu: 'https://www.fibernet.uz/tariff/online/',
   connectUz: 'https://www.fibernet.uz/language/uz/meni-ulang-2/',
   connectRu: 'https://www.fibernet.uz/connect-me/',
-  paymentUz: 'https://www.fibernet.uz/language/uz/tolov-usullari/',
+  paymentUz: 'https://corp.fibernet.uz/uz/tolov-kerak/',
   paymentRu: 'https://www.fibernet.uz/payments/',
   contactsUz: 'https://www.fibernet.uz/language/uz/aloqa-uchun/',
   contactsRu: 'https://www.fibernet.uz/contacts/',
