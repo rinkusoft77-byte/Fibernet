@@ -98,11 +98,31 @@ export const languageKeyboard = () => inlineKeyboard([[
 ]]);
 
 export const homeKeyboard = lang => inlineKeyboard([
-  [{ text: L(lang, '🏢 Bo‘limlar', '🏢 Отделы'), callback_data: 'home:departments' }],
-  [{ text: L(lang, '📶 Tariflar', '📶 Тарифы'), callback_data: 'home:tariffs' }, { text: '📺 HopHop TV', callback_data: 'home:tv' }],
-  [{ text: L(lang, '👤 Profilim', '👤 Мой профиль'), callback_data: 'home:profile' }, { text: L(lang, '📂 Murojaatlarim', '📂 Мои обращения'), callback_data: 'home:tickets' }],
-  [{ text: L(lang, '🎁 Aksiyalar', '🎁 Акции'), callback_data: 'home:promo' }, { text: L(lang, '☎️ Aloqa', '☎️ Контакты'), callback_data: 'home:contacts' }],
-  [{ text: L(lang, 'ℹ️ FiberNet haqida', 'ℹ️ О FiberNet'), callback_data: 'home:about' }, { text: L(lang, '🌐 Til', '🌐 Язык'), callback_data: 'home:language' }]
+  [
+    { text: L(lang, '🛠 Yordam', '🛠 Помощь'), callback_data: 'home:departments' },
+    { text: L(lang, '📶 Tariflar', '📶 Тарифы'), callback_data: 'home:tariffs' }
+  ],
+  [
+    { text: L(lang, '💳 To‘lov', '💳 Оплата'), callback_data: 'v22:payment' },
+    { text: '📺 TV', callback_data: 'home:tv' }
+  ],
+  [
+    { text: L(lang, '🔌 Ulanish', '🔌 Подключение'), callback_data: 'v22:connect' },
+    { text: L(lang, '🧰 Xizmatlar', '🧰 Услуги'), callback_data: 'v22:services' }
+  ],
+  [
+    { text: L(lang, '👤 Profil', '👤 Профиль'), callback_data: 'home:profile' },
+    { text: L(lang, '📂 Murojaatlar', '📂 Обращения'), callback_data: 'home:tickets' }
+  ],
+  [
+    { text: L(lang, '☎️ Aloqa', '☎️ Контакты'), callback_data: 'home:contacts' },
+    { text: L(lang, '📰 Yangiliklar', '📰 Новости'), callback_data: 'v22:news' }
+  ],
+  [
+    { text: L(lang, '🎁 Aksiyalar', '🎁 Акции'), callback_data: 'home:promo' },
+    { text: L(lang, 'ℹ️ FiberNet', 'ℹ️ FiberNet'), callback_data: 'home:about' }
+  ],
+  [{ text: L(lang, '🌐 Til', '🌐 Язык'), callback_data: 'home:language' }]
 ]);
 
 export const departmentsKeyboard = lang => inlineKeyboard([
