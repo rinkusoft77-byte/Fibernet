@@ -183,6 +183,21 @@ async function revokeOperator(env, chatId, userId, revokedBy) {
   return released;
 }
 
+export async function approvePanelOperator(env,chatId,userId,adminId){
+  const department=await getDepartmentByChat(env,chatId);
+  if(!department?.department) throw new Error('Department not configured');
+  const member=await tg(env,'getChatMember',{chat_id:chatId,user_id:userId});
+  if(!['member','administrator','creator'].includes(member.status) && !(member.status==='restricted'&&member.is_member))
+    throw new Error('Not a group member');
+  await upsertApproved(env,chatId,Number(userId),adminId);
+}
+
+export async function revokePanelOperator(env,chatId,userId,adminId){
+  const department=await getDepartmentByChat(env,chatId);
+  if(!department?.department) throw new Error('Department not configured');
+  return revokeOperator(env,chatId,Number(userId),adminId);
+}
+
 async function requestAccess(env, msg) {
   const dep = await getDepartmentByChat(env, msg.chat.id);
   if (!dep?.department) {
