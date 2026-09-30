@@ -834,17 +834,34 @@ export async function maintenanceGate(env,update){
   const from=msg?.from||q?.from;
   const chat=msg?.chat||q?.message?.chat;
   if(!from||!isPrivate(chat)||isBotAdmin(env,from.id)) return false;
+
+  // Keep established support channels open during maintenance.
+  if(String(q?.data||'').startsWith('ticket:reply:')) return false;
+  if(msg && !String(msg.text||'').trim().startsWith('/')){
+    const active=await safeFirst(env,`SELECT c.ticket_no FROM fn21_conversations c
+      JOIN fn5_tickets t ON t.ticket_no=c.ticket_no
+      WHERE c.telegram_id=? AND c.state IN ('waiting_operator','active','engaged')
+        AND t.status='open' ORDER BY c.updated_at DESC LIMIT 1`,[from.id]);
+    if(active) return false;
+  }
+
+  if(q?.id) await answerCallback(env,q.id,'Texnik ishlar');
+  const shown=await env.DB.prepare(`INSERT INTO fn23_maintenance_notices(telegram_id,shown_at)
+    VALUES(?,CURRENT_TIMESTAMP)
+    ON CONFLICT(telegram_id) DO UPDATE SET shown_at=CURRENT_TIMESTAMP
+    WHERE datetime(fn23_maintenance_notices.shown_at)<=datetime('now','-10 minutes')`)
+    .bind(from.id).run();
+  if(!shown.meta?.changes) return true;
+
   const user=await safeFirst(env,'SELECT language FROM fn5_users WHERE telegram_id=?',[from.id]);
   const lang=user?.language==='ru'?'ru':'uz';
   const fallback=lang==='ru'
-    ? '🚧 <b>Технические работы</b>\n\nFiberNet Assistant временно на обслуживании. Попробуйте немного позже.\n\n🛠 Техподдержка: +998 71 200-47-47 · доб. 3'
-    : '🚧 <b>Texnik ishlar</b>\n\nFiberNet Assistant vaqtincha texnik xizmatda. Birozdan keyin qayta urinib ko‘ring.\n\n🛠 Texnik yordam: +998 71 200-47-47 · ichki 3';
-  const text=await getSetting(env,`text.maintenance.${lang}`,fallback);
-  if(q?.id) await answerCallback(env,q.id,'Texnik ishlar');
-  await sendMessage(env,chat.id,text);
+    ? '🚧 <b>Технические работы</b>\n\nНовые обращения временно приостановлены. Существующие диалоги продолжают работать.\n\n🛠 Техподдержка: +998 71 200-47-47 · доб. 3'
+    : '🚧 <b>Texnik ishlar</b>\n\nYangi murojaatlar vaqtincha to‘xtatilgan. Ochiq ticketdagi operator suhbatlari ishlashda davom etadi.\n\n🛠 Texnik yordam: +998 71 200-47-47 · ichki 3';
+  const message=await getSetting(env,`text.maintenance.${lang}`,fallback);
+  await sendMessage(env,chat.id,message);
   return true;
 }
-
 export async function runV23Maintenance(env){
   await cleanupV23Store(env);
   await processBroadcasts(env);
