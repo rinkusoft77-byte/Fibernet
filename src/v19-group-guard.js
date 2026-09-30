@@ -396,9 +396,11 @@ async function validateTicketCallback(env, q) {
     await answerCallback(env, q.id, 'Bu ticket boshqa operator guruhiga tegishli');
     return false;
   }
-  const topic = await mappedTopic(env, q.message.chat.id, q.message.message_thread_id);
-  if (topic && topic.ticket_no !== no) {
-    await answerCallback(env, q.id, 'Tugma boshqa ticketga tegishli');
+  const expected=await env.DB.prepare(`SELECT chat_id,thread_id,state FROM fn15_topics WHERE ticket_no=?`).bind(no).first();
+  if(!expected || expected.state!=='open' || !expected.thread_id ||
+      String(expected.chat_id)!==String(q.message.chat.id) ||
+      String(expected.thread_id)!==String(q.message.message_thread_id||'')){
+    await answerCallback(env,q.id,'Faqat ticketning o‘z Topic’ida boshqaring');
     return false;
   }
   return true;
@@ -585,7 +587,7 @@ async function groupMessageGuard(env, msg) {
     return true;
   }
 
-  if (await handleSafeReplySession(env, msg)) return true;
+  // Main chat cannot forward an old reply session.
 
   if (cmd === 'cancelreply') {
     await env.DB.prepare('DELETE FROM fn19_reply_sessions WHERE chat_id=? AND operator_id=?')
@@ -598,7 +600,7 @@ async function groupMessageGuard(env, msg) {
   const topic = await mappedTopic(env, msg.chat.id, msg.message_thread_id);
   if (topic) return false;
 
-  if (await handleDirectCardReply(env, msg)) return true;
+  // Old General-chat ticket card replies are never relayed.
 
   if (cmd) {
     if (isKnownOperatorCommand(cmd)) return false;
