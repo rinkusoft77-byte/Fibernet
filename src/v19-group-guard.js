@@ -398,6 +398,12 @@ async function mappedTopic(env, chatId, threadId) {
   }
 }
 
+export function matchesTicketTopic(row, chatId, threadId) {
+  return Boolean(row && row.state==='open' && row.thread_id &&
+    String(row.chat_id)===String(chatId) &&
+    String(row.thread_id)===String(threadId||''));
+}
+
 async function validateTicketCallback(env, q) {
   const no = extractTicketNo(q.data || '');
   if (!no) return true;
@@ -412,9 +418,7 @@ async function validateTicketCallback(env, q) {
     return false;
   }
   const expected=await env.DB.prepare(`SELECT chat_id,thread_id,state FROM fn15_topics WHERE ticket_no=?`).bind(no).first();
-  if(!expected || expected.state!=='open' || !expected.thread_id ||
-      String(expected.chat_id)!==String(q.message.chat.id) ||
-      String(expected.thread_id)!==String(q.message.message_thread_id||'')){
+  if(!matchesTicketTopic(expected,q.message.chat.id,q.message.message_thread_id)){
     await answerCallback(env,q.id,'Faqat ticketning o‘z Topic’ida boshqaring');
     return false;
   }
@@ -737,5 +741,6 @@ export async function v19Health(env) {
 export const __test = {
   commandName,
   extractTicketNo,
-  isKnownOperatorCommand
+  isKnownOperatorCommand,
+  matchesTicketTopic
 };
