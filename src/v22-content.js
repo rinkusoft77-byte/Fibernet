@@ -2,6 +2,7 @@ import { MEDIA } from './config.js';
 import { clearSession, getUser, upsertUser } from './v5-db.js';
 import { L } from './v8-ui.js';
 import { getSetting, getSettingsMap } from './v23-store.js';
+import { validOfficialLink, validMediaInput } from './v24-validation.js';
 import {
   answerCallback, escapeHtml, inlineKeyboard, sendChatAction, sendMessage, sendPhoto
 } from './telegram.js';
@@ -134,6 +135,7 @@ async function runtimeLinks(env, lang) {
     'link.newsRu': OFFICIAL.newsRu
   };
   const x = await getSettingsMap(env, d);
+  for (const [key, fallback] of Object.entries(d)) if (!validOfficialLink(x[key])) x[key] = fallback;
   return {
     site: lang === 'ru' ? x['link.siteRu'] : x['link.siteUz'],
     channel: x['link.channel'],
@@ -152,7 +154,8 @@ async function runtimeLinks(env, lang) {
 }
 
 async function runtimeAsset(env, key, fallback) {
-  return getSetting(env, `asset.${key}`, fallback);
+  const value = await getSetting(env, `asset.${key}`, fallback);
+  return validMediaInput(value, !String(value).startsWith('https://')) ? value : fallback;
 }
 
 async function runtimeCaption(env, section, lang, fallback) {
