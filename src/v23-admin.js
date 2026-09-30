@@ -399,17 +399,20 @@ async function previewSection(env,q,section){
 }
 
 async function showBroadcast(env,chatId){
-  const recent=await safeAll(env,`SELECT id,status,target_count,delivered,failed,created_at
+  const recent=await safeAll(env,`SELECT id,admin_id,status,target_count,delivered,failed,created_at
     FROM fn23_broadcasts ORDER BY id DESC LIMIT 5`);
+  const controls=recent.filter(x=>['queued','sending'].includes(x.status)).map(x=>[{
+    text:`⏹ To‘xtatish #${x.id}`,callback_data:`v23:broadcast:stop:${x.id}`
+  }]);
   return sendMessage(env,chatId,[
     '📢 <b>Broadcast Center</b>', '',
-    'Text, rasm, video, sticker, voice yoki boshqa Telegram xabarini barcha bot foydalanuvchilariga yuborish mumkin.',
-    'Yuborishdan oldin preview va alohida tasdiq bo‘ladi.', '',
+    'Avval preview va alohida tasdiq bo‘ladi. Qayta bosilgan tugmalar takroriy yuborishni boshlamaydi.', '',
     ...recent.map(x=>`#${x.id} · ${escapeHtml(x.status)} · ${x.delivered}/${x.target_count} ✅ · ${x.failed} ❌`)
   ].join('\n'),{
     reply_markup:inlineKeyboard([
       [{text:'➕ Yangi broadcast',callback_data:'v23:broadcast:new'}],
       [{text:'🔄 Status',callback_data:'v23:broadcast'}],
+      ...controls,
       [{text:'⬅️ Admin panel',callback_data:'v23:main'}]
     ])
   });
@@ -442,55 +445,117 @@ async function draftBroadcast(env,msg){
   return true;
 }
 
-async function confirmBroadcast(env,q,id){
-  const b=await safeFirst(env,'SELECT * FROM fn23_broadcasts WHERE id=? AND admin_id=?',[id,q.from.id]);
-  if(!b||b.status!=='draft'){await answerCallback(env,q.id,'Draft topilmadi');return true;}
+async function prepareBroadcastQueue(env,id){
   await env.DB.prepare(`INSERT OR IGNORE INTO fn23_broadcast_queue(broadcast_id,telegram_id)
     SELECT ?,telegram_id FROM fn5_users`).bind(id).run();
   const count=await safeFirst(env,'SELECT COUNT(*) n FROM fn23_broadcast_queue WHERE broadcast_id=?',[id]);
-  await env.DB.prepare(`UPDATE fn23_broadcasts SET status='queued',target_count=?,started_at=CURRENT_TIMESTAMP WHERE id=?`)
-    .bind(count?.n||0,id).run();
-  await auditAdmin(env,q.from.id,'broadcast_confirmed',String(id),`targets=${count?.n||0}`);
-  await answerCallback(env,q.id,'Broadcast queue yaratildi');
-  await sendMessage(env,q.message.chat.id,`✅ Broadcast <b>#${id}</b> queuega qo‘yildi. Target: <b>${count?.n||0}</b>.`);
+  await env.DB.prepare(`UPDATE fn23_broadcasts SET status='queued',target_count=?
+    WHERE id=? AND status='preparing'`).bind(count?.n||0,id).run();
+  return Number(count?.n||0);
+}
+
+async function confirmBroadcast(env,q,id){
+  if(!Number.isSafeInteger(id)||id<=0){await answerCallback(env,q.id,'Noto‘g‘ri broadcast');return true;}
+  // Atomic compare-and-set: old Confirm buttons cannot queue a broadcast twice.
+  const reserved=await env.DB.prepare(`UPDATE fn23_broadcasts SET status='preparing',started_at=CURRENT_TIMESTAMP
+    WHERE id=? AND admin_id=? AND status='draft'`).bind(id,q.from.id).run();
+  if(Number(reserved.meta?.changes||0)!==1){
+    await answerCallback(env,q.id,'Bu broadcast allaqachon tasdiqlangan yoki bekor qilingan');
+    return true;
+  }
+  const count=await prepareBroadcastQueue(env,id);
+  await auditAdmin(env,q.from.id,'broadcast_confirmed',String(id),`targets=${count}`);
+  await answerCallback(env,q.id,'Broadcast navbatga qo‘yildi');
+  await sendMessage(env,q.message.chat.id,`✅ Broadcast <b>#${id}</b> navbatga qo‘yildi. Qabul qiluvchilar: <b>${count}</b>.`);
   return true;
 }
 
 async function cancelBroadcast(env,q,id){
-  await env.DB.prepare("UPDATE fn23_broadcasts SET status='cancelled',finished_at=CURRENT_TIMESTAMP WHERE id=? AND status='draft'").bind(id).run();
-  await auditAdmin(env,q.from.id,'broadcast_cancelled',String(id));
-  await answerCallback(env,q.id,'Bekor qilindi');
+  const result=await env.DB.prepare(`UPDATE fn23_broadcasts
+    SET status='cancelled',finished_at=CURRENT_TIMESTAMP
+    WHERE id=? AND admin_id=? AND status='draft'`).bind(id,q.from.id).run();
+  if(result.meta?.changes) await auditAdmin(env,q.from.id,'broadcast_cancelled',String(id));
+  await answerCallback(env,q.id,result.meta?.changes?'Bekor qilindi':'Bu draft allaqachon o‘zgargan');
   return showBroadcast(env,q.message.chat.id);
+}
+
+async function stopBroadcast(env,q,id){
+  const result=await env.DB.prepare(`UPDATE fn23_broadcasts
+    SET status='cancelled',finished_at=CURRENT_TIMESTAMP
+    WHERE id=? AND status IN ('queued','sending')`).bind(id).run();
+  if(!result.meta?.changes){
+    await answerCallback(env,q.id,'Broadcast yakunlangan yoki to‘xtatilgan');return true;
+  }
+  await env.DB.prepare(`UPDATE fn23_broadcast_queue SET status='cancelled',updated_at=CURRENT_TIMESTAMP
+    WHERE broadcast_id=? AND status='pending'`).bind(id).run();
+  await auditAdmin(env,q.from.id,'broadcast_stopped',String(id));
+  await answerCallback(env,q.id,'Yangi yuborishlar to‘xtatildi');
+  await sendMessage(env,q.message.chat.id,
+    `⏹ Broadcast <b>#${id}</b> to‘xtatildi. Hozir yuborilayotgan alohida xabarni ortga qaytarib bo‘lmaydi.`);
+  return true;
 }
 
 async function processBroadcasts(env){
   await ensureV23Store(env);
+  // Recover drafts whose preparation was interrupted by a worker restart.
+  const preparing=await safeAll(env,`SELECT id FROM fn23_broadcasts
+    WHERE status='preparing' AND datetime(started_at)<=datetime('now','-1 minute') LIMIT 3`);
+  for(const b of preparing) await prepareBroadcastQueue(env,b.id);
+
+  // A worker can die between claim and Telegram response; return timed-out
+  // work to the queue rather than silently losing it.
+  await env.DB.prepare(`UPDATE fn23_broadcast_queue SET status='pending',updated_at=CURRENT_TIMESTAMP
+    WHERE status='sending' AND datetime(updated_at)<=datetime('now','-10 minutes')
+      AND broadcast_id IN (SELECT id FROM fn23_broadcasts WHERE status IN ('queued','sending'))`).run();
+
   const jobs=await safeAll(env,`SELECT q.broadcast_id,q.telegram_id,b.source_chat_id,b.source_message_id
     FROM fn23_broadcast_queue q JOIN fn23_broadcasts b ON b.id=q.broadcast_id
     WHERE q.status='pending' AND b.status IN ('queued','sending')
       AND datetime(q.next_try_at)<=datetime('now')
-    ORDER BY q.broadcast_id,q.telegram_id LIMIT 35`);
+    ORDER BY q.broadcast_id,q.telegram_id LIMIT 25`);
   for(const x of jobs){
+    // Atomic lease: two overlapping cron jobs cannot both claim this row.
+    const claim=await env.DB.prepare(`UPDATE fn23_broadcast_queue
+      SET status='sending',attempts=attempts+1,updated_at=CURRENT_TIMESTAMP
+      WHERE broadcast_id=? AND telegram_id=? AND status='pending'
+        AND EXISTS(SELECT 1 FROM fn23_broadcasts WHERE id=? AND status IN ('queued','sending'))`)
+      .bind(x.broadcast_id,x.telegram_id,x.broadcast_id).run();
+    if(Number(claim.meta?.changes||0)!==1) continue;
     try{
-      await tg(env,'copyMessage',{chat_id:x.telegram_id,from_chat_id:x.source_chat_id,message_id:x.source_message_id});
-      await env.DB.prepare("UPDATE fn23_broadcast_queue SET status='delivered',updated_at=CURRENT_TIMESTAMP WHERE broadcast_id=? AND telegram_id=?")
+      await tg(env,'copyMessage',{
+        chat_id:x.telegram_id,from_chat_id:x.source_chat_id,message_id:x.source_message_id
+      });
+      const done=await env.DB.prepare(`UPDATE fn23_broadcast_queue SET status='delivered',updated_at=CURRENT_TIMESTAMP
+        WHERE broadcast_id=? AND telegram_id=? AND status='sending'`)
         .bind(x.broadcast_id,x.telegram_id).run();
-      await env.DB.prepare("UPDATE fn23_broadcasts SET status='sending',delivered=delivered+1 WHERE id=?").bind(x.broadcast_id).run();
+      if(done.meta?.changes){
+        await env.DB.prepare(`UPDATE fn23_broadcasts SET delivered=delivered+1,
+          status=CASE WHEN status='queued' THEN 'sending' ELSE status END WHERE id=?`)
+          .bind(x.broadcast_id).run();
+      }
     }catch(e){
       const error=String(e).slice(0,500);
+      const row=await safeFirst(env,`SELECT attempts FROM fn23_broadcast_queue
+        WHERE broadcast_id=? AND telegram_id=?`,[x.broadcast_id,x.telegram_id]);
       const permanent=/bot was blocked|user is deactivated|chat not found|forbidden/i.test(error);
-      await env.DB.prepare(`UPDATE fn23_broadcast_queue SET
-        status=?,attempts=attempts+1,last_error=?,
-        next_try_at=CASE WHEN ? THEN next_try_at ELSE datetime('now','+15 minutes') END,
-        updated_at=CURRENT_TIMESTAMP WHERE broadcast_id=? AND telegram_id=?`)
-        .bind(permanent?'failed':'pending',error,permanent?1:0,x.broadcast_id,x.telegram_id).run();
-      if(permanent) await env.DB.prepare('UPDATE fn23_broadcasts SET failed=failed+1 WHERE id=?').bind(x.broadcast_id).run();
+      const failed=permanent||Number(row?.attempts||0)>=6;
+      const step=Number(row?.attempts||0)<3?'+5 minutes':'+30 minutes';
+      const updated=await env.DB.prepare(`UPDATE fn23_broadcast_queue SET
+        status=?,last_error=?,next_try_at=datetime('now',?),updated_at=CURRENT_TIMESTAMP
+        WHERE broadcast_id=? AND telegram_id=? AND status='sending'`)
+        .bind(failed?'failed':'pending',error,step,x.broadcast_id,x.telegram_id).run();
+      if(failed&&updated.meta?.changes)
+        await env.DB.prepare('UPDATE fn23_broadcasts SET failed=failed+1 WHERE id=?')
+          .bind(x.broadcast_id).run();
     }
   }
-  const active=await safeAll(env,"SELECT id FROM fn23_broadcasts WHERE status IN ('queued','sending')");
+  const active=await safeAll(env,`SELECT id FROM fn23_broadcasts WHERE status IN ('queued','sending')`);
   for(const b of active){
-    const p=await safeFirst(env,"SELECT COUNT(*) n FROM fn23_broadcast_queue WHERE broadcast_id=? AND status='pending'",[b.id]);
-    if(!p?.n) await env.DB.prepare("UPDATE fn23_broadcasts SET status='completed',finished_at=CURRENT_TIMESTAMP WHERE id=?").bind(b.id).run();
+    const remaining=await safeFirst(env,`SELECT COUNT(*) n FROM fn23_broadcast_queue
+      WHERE broadcast_id=? AND status IN ('pending','sending')`,[b.id]);
+    if(!remaining?.n) await env.DB.prepare(`UPDATE fn23_broadcasts
+      SET status='completed',finished_at=CURRENT_TIMESTAMP WHERE id=?
+      AND status IN ('queued','sending')`).bind(b.id).run();
   }
 }
 
@@ -688,6 +753,7 @@ async function handleAdminCallback(env,q){
   if(data==='v23:broadcast:new') return beginBroadcast(env,q);
   if(data.startsWith('v23:broadcast:confirm:')) return confirmBroadcast(env,q,Number(data.split(':')[3]));
   if(data.startsWith('v23:broadcast:cancel:')) return cancelBroadcast(env,q,Number(data.split(':')[3]));
+  if(data.startsWith('v23:broadcast:stop:')) return stopBroadcast(env,q,Number(data.split(':')[3]));
   if(data==='v23:system'){await answerCallback(env,q.id);return showSystem(env,chatId);}
   if(data==='v23:system:maintenance') return toggleMaintenance(env,q);
   if(data==='v23:system:sync') return syncSources(env,q);
