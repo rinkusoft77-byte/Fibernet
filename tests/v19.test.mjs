@@ -29,3 +29,12 @@ test('only known operator commands are allowed to legacy routers', () => {
   assert.equal(__test.isKnownOperatorCommand('start'), false);
   assert.equal(__test.isKnownOperatorCommand('random'), false);
 });
+
+test('topic-only ACL checks current thread and chat', () => {
+  const x={chat_id:-10022,thread_id:124,state:'open'};
+  assert.equal(__test.matchesTicketTopic(x,-10022,124),true);
+  assert.equal(__test.matchesTicketTopic(x,-10022,null),false);
+  assert.equal(__test.matchesTicketTopic(x,-10022,125),false);
+  assert.equal(__test.matchesTicketTopic(x,-10023,124),false);
+  assert.equal(__test.matchesTicketTopic({...x,state:'closed'},-10022,124),false);
+});
