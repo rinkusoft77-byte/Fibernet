@@ -12,6 +12,7 @@ import {
 } from './v23-store.js';
 import { answerCallback, escapeHtml, inlineKeyboard, sendMessage, tg } from './telegram.js';
 import { validOfficialLink, validMediaInput } from './v24-validation.js';
+import { approvePanelOperator, revokePanelOperator } from './v19-group-guard.js';
 
 const VERSION = '23.0.0';
 
@@ -271,19 +272,72 @@ async function showProfiles(env,chatId){
 }
 
 async function showOperators(env,chatId){
-  const rows=await safeAll(env,`SELECT chat_id,user_id,display_name,username,status,updated_at
+  const rows=await safeAll(env,`SELECT chat_id,user_id,display_name,username,status
     FROM fn19_operator_acl
-    ORDER BY CASE status WHEN 'approved' THEN 0 WHEN 'pending' THEN 1 ELSE 2 END,updated_at DESC LIMIT 30`);
+    ORDER BY CASE status WHEN 'pending' THEN 0 WHEN 'approved' THEN 1 ELSE 2 END,
+      updated_at DESC LIMIT 12`);
+  const buttons=rows.map(x=>[{
+    text:`${x.status==='approved'?'✅':x.status==='pending'?'⏳':'🚫'} ${String(x.display_name||x.user_id).slice(0,30)}`,
+    callback_data:`v23:operator:detail:${x.chat_id}:${x.user_id}`
+  }]);
+  buttons.push([{text:'⬅️ Admin panel',callback_data:'v23:main'}]);
   return sendMessage(env,chatId,[
-    '👨‍💻 <b>Operatorlar</b>', '',
-    ...(rows.length?rows.map(x=>
-      `${x.status==='approved'?'✅':x.status==='pending'?'⏳':'🚫'} <b>${escapeHtml(x.display_name||String(x.user_id))}</b> · <code>${x.user_id}</code>\n   group: <code>${x.chat_id}</code>`
-    ):['—']),
-    '',
-    'Operator huquqini guruh ichida /operators, /opadd, /opremove orqali boshqaring.'
-  ].join('\n'),{reply_markup:inlineKeyboard([[{text:'⬅️ Admin panel',callback_data:'v23:main'}]])});
+    '👨‍💻 <b>Operator boshqaruvi</b>','',
+    'Operatorni tanlang: guruhdagi a’zoligini tekshirib tasdiqlash, ruxsatini bekor qilish va bog‘langan ticketlarni navbatga qaytarish mumkin.',
+    `Ko‘rsatilmoqda: ${rows.length}`
+  ].join('\n'),{reply_markup:inlineKeyboard(buttons)});
 }
 
+async function showOperatorDetail(env,chatId,chatRaw,userRaw){
+  if(!/^-?\d+$/.test(String(chatRaw))||!/^\d+$/.test(String(userRaw)))
+    return sendMessage(env,chatId,'⚠️ ID noto‘g‘ri.');
+  const op=await safeFirst(env,`SELECT * FROM fn19_operator_acl WHERE chat_id=? AND user_id=?`,[chatRaw,userRaw]);
+  if(!op)return sendMessage(env,chatId,'⚠️ Operator topilmadi.');
+  const group=await safeFirst(env,'SELECT department FROM fn7_department_chats WHERE chat_id=?',[chatRaw]);
+  const buttons=[];
+  if(op.status!=='approved') buttons.push([{
+    text:'✅ Operator sifatida tasdiqlash',callback_data:`v23:operator:approve:${chatRaw}:${userRaw}`
+  }]);
+  if(op.status==='approved'&&!isBotAdmin(env,userRaw)) buttons.push([{
+    text:'🚫 Ruxsatni bekor qilish',callback_data:`v23:operator:askrevoke:${chatRaw}:${userRaw}`
+  }]);
+  buttons.push([{text:'⬅️ Operatorlar',callback_data:'v23:operators'}]);
+  return sendMessage(env,chatId,[
+    '👨‍💻 <b>Operator profili</b>','',
+    `👤 ${escapeHtml(op.display_name||'—')} · <code>${op.user_id}</code>`,
+    `🏢 ${escapeHtml(group?.department||'Ulanmagan')} · <code>${op.chat_id}</code>`,
+    `🔐 ${escapeHtml(op.status)}`
+  ].join('\n'),{reply_markup:inlineKeyboard(buttons)});
+}
+
+async function operatorAction(env,q,action,chatId,userId){
+  if(!/^-?\d+$/.test(String(chatId))||!/^\d+$/.test(String(userId))){
+    await answerCallback(env,q.id,'Noto‘g‘ri ID');return true;
+  }
+  if(action==='askrevoke'){
+    await answerCallback(env,q.id);
+    return sendMessage(env,q.message.chat.id,'⚠️ Operatorni guruhning support tizimidan chiqarishni tasdiqlang. Ochiq ticketlari navbatga qaytarilishi mumkin.',{
+      reply_markup:inlineKeyboard([
+        [{text:'🚫 Ha, ruxsat bekor',callback_data:`v23:operator:revoke:${chatId}:${userId}`}],
+        [{text:'⬅️ Bekor',callback_data:`v23:operator:detail:${chatId}:${userId}`}]
+      ])
+    });
+  }
+  if(action==='revoke'&&isBotAdmin(env,userId)){
+    await answerCallback(env,q.id,'Bot administratorini bu yerdan bekor qilib bo‘lmaydi');return true;
+  }
+  try{
+    if(action==='approve') await approvePanelOperator(env,chatId,userId,q.from.id);
+    else if(action==='revoke') await revokePanelOperator(env,chatId,userId,q.from.id);
+    else {await answerCallback(env,q.id,'Noma’lum amal');return true;}
+    await auditAdmin(env,q.from.id,`operator_${action}`,`${chatId}:${userId}`);
+    await answerCallback(env,q.id,'Operator huquqi yangilandi');
+    return showOperatorDetail(env,q.message.chat.id,chatId,userId);
+  }catch(e){
+    await answerCallback(env,q.id,'Amal bajarilmadi');
+    return sendMessage(env,q.message.chat.id,`⚠️ ${escapeHtml(String(e.message||e).slice(0,160))}`);
+  }
+}
 async function showTickets(env,chatId){
   const rows=await safeAll(env,`SELECT ticket_no,department,category,priority,stage,assigned_name,created_at
     FROM fn5_tickets WHERE status='open'
@@ -774,6 +828,11 @@ async function handleAdminCallback(env,q){
   if(data==='v23:support:wait') return beginWaitEdit(env,q);
   if(data==='v23:profiles'){await answerCallback(env,q.id);return showProfiles(env,chatId);}
   if(data==='v23:operators'){await answerCallback(env,q.id);return showOperators(env,chatId);}
+  if(data.startsWith('v23:operator:')){
+    const p=data.split(':');
+    if(p[2]==='detail'){await answerCallback(env,q.id);return showOperatorDetail(env,chatId,p[3],p[4]);}
+    return operatorAction(env,q,p[2],p[3],p[4]);
+  }
   if(data==='v23:tickets'){await answerCallback(env,q.id);return showTickets(env,chatId);}
   if(data==='v23:ticketfind') return beginTicketFind(env,q);
   if(data.startsWith('v23:ticket:')){await answerCallback(env,q.id);return showTicketDetail(env,chatId,data.slice('v23:ticket:'.length));}
