@@ -596,9 +596,24 @@ async function showSystem(env,chatId){
 
 async function toggleMaintenance(env,q){
   const current=await getBooleanSetting(env,'system.maintenance',false);
-  await setSetting(env,'system.maintenance',current?'0':'1','boolean',q.from.id);
-  await auditAdmin(env,q.from.id,'maintenance_toggle',null,current?'off':'on');
-  await answerCallback(env,q.id,current?'Maintenance OFF':'Maintenance ON');
+  const mode=current?'off':'on';
+  await answerCallback(env,q.id);
+  return sendMessage(env,q.message.chat.id,'⚠️ <b>Maintenance o‘zgarishini tasdiqlang</b>',{
+    reply_markup:inlineKeyboard([
+      [{text:mode==='on'?'🚧 Ha, yoqilsin':'✅ Ha, o‘chirilsin',callback_data:`v23:system:maintenance:apply:${mode}`}],
+      [{text:'⬅️ Bekor',callback_data:'v23:system'}]
+    ])
+  });
+}
+
+async function applyMaintenance(env,q,mode){
+  if(!['on','off'].includes(mode)){await answerCallback(env,q.id,'Noto‘g‘ri qiymat');return true;}
+  const current=await getBooleanSetting(env,'system.maintenance',false);
+  if(current!==(mode==='on')){
+    await setSetting(env,'system.maintenance',mode==='on'?'1':'0','boolean',q.from.id);
+    await auditAdmin(env,q.from.id,'maintenance_changed',null,mode);
+  }
+  await answerCallback(env,q.id,'Holat tekshirildi');
   return showSystem(env,q.message.chat.id);
 }
 
@@ -775,6 +790,7 @@ async function handleAdminCallback(env,q){
   if(data.startsWith('v23:broadcast:stop:')) return stopBroadcast(env,q,Number(data.split(':')[3]));
   if(data==='v23:system'){await answerCallback(env,q.id);return showSystem(env,chatId);}
   if(data==='v23:system:maintenance') return toggleMaintenance(env,q);
+  if(data.startsWith('v23:system:maintenance:apply:')) return applyMaintenance(env,q,data.split(':')[4]);
   if(data==='v23:system:sync') return syncSources(env,q);
   if(data==='v23:system:cache') return clearMediaCache(env,q);
   if(data==='v23:audit'){await answerCallback(env,q.id);return showAudit(env,chatId);}
