@@ -371,7 +371,7 @@ async function adminView(env, q, telegramId) {
     p.reviewed_by_name ? `🛡 Reviewer: ${escapeHtml(p.reviewed_by_name)}` : null
   ].filter(Boolean).join('\n'), {
     ...(q.message.message_thread_id ? { message_thread_id:q.message.message_thread_id } : {}),
-    reply_markup: p.status === 'pending' ? adminProfileKeyboard(telegramId) : undefined
+    reply_markup: p.status === 'pending' ? adminProfileKeyboard(telegramId, p) : undefined
   });
   return true;
 }
@@ -407,7 +407,7 @@ async function adminClientCommand(env, msg, telegramId) {
     '',
     `📌 Status: <b>${escapeHtml(p.status)}</b>`
   ].join('\n'), {
-    reply_markup: p.status === 'pending' ? adminProfileKeyboard(telegramId) : undefined
+    reply_markup: p.status === 'pending' ? adminProfileKeyboard(telegramId, p) : undefined
   });
   return true;
 }
