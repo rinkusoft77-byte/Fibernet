@@ -11,6 +11,7 @@ import {
   resetSetting, restorePreviousSetting, setAdminSession, setSetting
 } from './v23-store.js';
 import { answerCallback, escapeHtml, inlineKeyboard, sendMessage, tg } from './telegram.js';
+import { validOfficialLink, validMediaInput } from './v24-validation.js';
 
 const VERSION = '23.0.0';
 
@@ -225,6 +226,7 @@ async function beginLinkEdit(env,q,key){
     `🔗 <b>${escapeHtml(key)}</b>`, '',
     current ? `Custom: <code>${escapeHtml(current)}</code>` : 'ℹ️ Standart rasmiy URL ishlatilmoqda.', '',
     'Yangi HTTPS havolani yuboring.',
+    'Faqat fibernet.uz va @fibernet_* rasmiy havolalari qabul qilinadi.',
     '<code>/reset</code> — standart · <code>/undo</code> — oldingi · <code>/cancel</code> — bekor'
   ].join('\n'));
   return true;
@@ -317,7 +319,7 @@ async function showTicketDetail(env,chatId,no){
   ].join('\n'),{
     reply_markup:inlineKeyboard([
       [{text:'🔴 High',callback_data:`v23:ticketprio:${no}:high`},{text:'🟡 Normal',callback_data:`v23:ticketprio:${no}:normal`}],
-      [{text:'✅ Hal qilindi',callback_data:`v23:ticketresolve:${no}`},{text:'❌ Yopish',callback_data:`v23:ticketclose:${no}`}],
+      [{text:'✅ Hal qilindi',callback_data:`v23:ticketresolve:${no}`},{text:'❌ Yopish',callback_data:`v23:ticketclose:ask:${no}`}],
       [{text:'⬅️ Ticketlar',callback_data:'v23:tickets'}]
     ])
   });
@@ -342,6 +344,22 @@ async function resolveTicketAdmin(env,q,no){
       {reply_markup:inlineKeyboard([[{text:'💬 Operatorga javob',callback_data:`ticket:reply:${no}`}]])});
   }catch{}
   return showTicketDetail(env,q.message.chat.id,no);
+}
+
+async function askCloseTicket(env,q,no){
+  const t=await getTicket(env,no);
+  await answerCallback(env,q.id);
+  if(!t || t.status!=='open') return sendMessage(env,q.message.chat.id,'⚠️ Ticket hozir ochiq emas.');
+  return sendMessage(env,q.message.chat.id,[
+    '⚠️ <b>Ticketni yopishni tasdiqlang</b>','',
+    `🎫 <code>${escapeHtml(no)}</code>`,
+    'Bu amal operator Topic’ini yopadi va abonentga xabar yuboradi.'
+  ].join('\n'),{
+    reply_markup:inlineKeyboard([
+      [{text:'✅ Ha, yopilsin',callback_data:`v23:ticketclose:confirm:${no}`}],
+      [{text:'⬅️ Bekor',callback_data:`v23:ticket:${no}`}]
+    ])
+  });
 }
 
 async function closeTicketAdmin(env,q,no){
@@ -657,8 +675,8 @@ async function handleSessionMessage(env,msg,session){
     let value=null;
     if(Array.isArray(msg.photo)&&msg.photo.length) value=msg.photo[msg.photo.length-1].file_id;
     else if(/^https:\/\/\S+$/i.test(text)) value=text.slice(0,1000);
-    if(!value){
-      await sendMessage(env,msg.chat.id,'⚠️ Rasmni <b>Photo</b> qilib yuboring yoki <code>https://...</code> URL yuboring.');
+    if(!value || !validMediaInput(value,!value.startsWith('https://'))){
+      await sendMessage(env,msg.chat.id,'⚠️ Yaroqli Telegram Photo yuboring yoki xavfsiz ochiq HTTPS rasm URL kiriting (private IP/localhost emas).');
       return true;
     }
     await setSetting(env,`asset.${key}`,value,'image',msg.from.id);
@@ -683,8 +701,8 @@ async function handleSessionMessage(env,msg,session){
   }
 
   if(session.action==='edit_link'){
-    if(!/^https:\/\/[^\s]+$/i.test(text) || text.length>1000){
-      await sendMessage(env,msg.chat.id,'⚠️ Faqat to‘liq <code>https://...</code> havola yuboring.');
+    if(!validOfficialLink(text)){
+      await sendMessage(env,msg.chat.id,'⚠️ Faqat rasmiy <code>https://fibernet.uz</code> (subdomenlari bilan) yoki <code>https://t.me/fibernet_...</code> havolasi qabul qilinadi.');
       return true;
     }
     const key=`link.${session.payload.key}`;
@@ -745,7 +763,8 @@ async function handleAdminCallback(env,q){
   if(data==='v23:ticketfind') return beginTicketFind(env,q);
   if(data.startsWith('v23:ticket:')){await answerCallback(env,q.id);return showTicketDetail(env,chatId,data.slice('v23:ticket:'.length));}
   if(data.startsWith('v23:ticketresolve:')) return resolveTicketAdmin(env,q,data.slice('v23:ticketresolve:'.length));
-  if(data.startsWith('v23:ticketclose:')) return closeTicketAdmin(env,q,data.slice('v23:ticketclose:'.length));
+  if(data.startsWith('v23:ticketclose:ask:')) return askCloseTicket(env,q,data.slice('v23:ticketclose:ask:'.length));
+  if(data.startsWith('v23:ticketclose:confirm:')) return closeTicketAdmin(env,q,data.slice('v23:ticketclose:confirm:'.length));
   if(data.startsWith('v23:ticketprio:')){const p=data.split(':');return priorityTicketAdmin(env,q,p[2],p[3]);}
   if(data==='v23:preview'){await answerCallback(env,q.id);return showPreviewMenu(env,chatId);}
   if(data.startsWith('v23:preview:')) return previewSection(env,q,data.slice('v23:preview:'.length));
