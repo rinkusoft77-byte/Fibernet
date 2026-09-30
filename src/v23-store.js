@@ -62,7 +62,11 @@ export async function ensureV23Store(env) {
       PRIMARY KEY(broadcast_id,telegram_id)
     )`,
     `CREATE INDEX IF NOT EXISTS idx_fn23_broadcast_due
-      ON fn23_broadcast_queue(status,next_try_at)`
+      ON fn23_broadcast_queue(status,next_try_at)`,
+    `CREATE TABLE IF NOT EXISTS fn23_maintenance_notices (
+      telegram_id INTEGER PRIMARY KEY,
+      shown_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )`
   ];
   for (const q of sql) await env.DB.prepare(q).run();
   ready = true;
