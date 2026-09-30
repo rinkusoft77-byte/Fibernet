@@ -227,11 +227,18 @@ function adminProfileText(user, p) {
   ].filter(Boolean).join('\n');
 }
 
-function adminProfileKeyboard(id) {
+function reviewRevision(profile) {
+  // Bind actions to the exact submission shown to the administrator.
+  const date=Date.parse(profile?.submitted_at || '');
+  return Number.isFinite(date) ? date.toString(36) : 'invalid';
+}
+
+function adminProfileKeyboard(id, profile) {
+  const revision=reviewRevision(profile);
   return inlineKeyboard([
-    [{ text: '✅ Tasdiqlash', callback_data: `v18admin:approve:${id}` },
-     { text: '❌ Qaytarish', callback_data: `v18admin:reject:${id}` }],
-    [{ text: '👁 Profil', callback_data: `v18admin:view:${id}` }]
+    [{ text: '✅ Tasdiqlash', callback_data: `v18admin:approve:${id}:${revision}` },
+     { text: '❌ Qaytarish', callback_data: `v18admin:reject:${id}:${revision}` }],
+    [{ text: '👁 Yangilangan profil', callback_data: `v18admin:view:${id}` }]
   ]);
 }
 
@@ -243,7 +250,7 @@ async function notifyAdmins(env, telegramId) {
   let delivered = 0;
   for (const id of adminIds(env)) {
     try {
-      await sendMessage(env, id, text, { reply_markup: adminProfileKeyboard(telegramId) });
+      await sendMessage(env, id, text, { reply_markup: adminProfileKeyboard(telegramId, p) });
       delivered++;
     } catch (e) {
       console.warn('v18 admin profile notification failed', { admin:id, error:String(e) });
@@ -293,19 +300,20 @@ async function skipProfile(env, q) {
   return showHome(env, q.message.chat.id, user);
 }
 
-async function approveProfile(env, q, telegramId) {
+async function approveProfile(env, q, telegramId, revision) {
   if (!isAdmin(env, q.from.id)) {
     await answerCallback(env, q.id, 'Ruxsat yo‘q');
     return true;
   }
   const p = await getClientProfile(env, telegramId);
-  if (!p || !p.given_name || !p.family_name) {
-    await answerCallback(env, q.id, 'Profil topilmadi');
+  if (!p || p.status !== 'pending' || !p.given_name || !p.family_name || reviewRevision(p) !== revision) {
+    await answerCallback(env, q.id, 'Eski karta. /client orqali yangi profilni oching.');
     return true;
   }
   const reviewer = [q.from.first_name, q.from.last_name].filter(Boolean).join(' ') || q.from.username || String(q.from.id);
-  await env.DB.prepare(`UPDATE fn18_profiles SET status='approved',reviewed_by=?,reviewed_by_name=?,reviewed_at=?,updated_at=?
-    WHERE telegram_id=?`).bind(q.from.id, reviewer, now(), now(), telegramId).run();
+  const changed=await env.DB.prepare(`UPDATE fn18_profiles SET status='approved',reviewed_by=?,reviewed_by_name=?,reviewed_at=?,updated_at=?
+    WHERE telegram_id=? AND status='pending' AND submitted_at=?`).bind(q.from.id, reviewer, now(), now(), telegramId, p.submitted_at).run();
+  if(Number(changed.meta?.changes||0)!==1){await answerCallback(env,q.id,'Profil allaqachon tekshirilgan');return true;}
   await env.DB.prepare('UPDATE fn5_users SET account_login=?,address=?,updated_at=? WHERE telegram_id=?')
     .bind(p.login || null, p.address || null, now(), telegramId).run();
   await answerCallback(env, q.id, 'Profil tasdiqlandi');
@@ -322,16 +330,19 @@ async function approveProfile(env, q, telegramId) {
   return true;
 }
 
-async function rejectProfile(env, q, telegramId) {
+async function rejectProfile(env, q, telegramId, revision) {
   if (!isAdmin(env, q.from.id)) {
     await answerCallback(env, q.id, 'Ruxsat yo‘q');
     return true;
   }
   const p = await getClientProfile(env, telegramId);
-  if (!p) { await answerCallback(env, q.id, 'Profil topilmadi'); return true; }
+  if (!p || p.status!=='pending' || reviewRevision(p)!==revision) {
+    await answerCallback(env, q.id, 'Eski karta. /client orqali yangi profilni oching.'); return true;
+  }
   const reviewer = [q.from.first_name, q.from.last_name].filter(Boolean).join(' ') || q.from.username || String(q.from.id);
-  await env.DB.prepare(`UPDATE fn18_profiles SET status='rejected',reviewed_by=?,reviewed_by_name=?,reviewed_at=?,updated_at=?
-    WHERE telegram_id=?`).bind(q.from.id, reviewer, now(), now(), telegramId).run();
+  const changed=await env.DB.prepare(`UPDATE fn18_profiles SET status='rejected',reviewed_by=?,reviewed_by_name=?,reviewed_at=?,updated_at=?
+    WHERE telegram_id=? AND status='pending' AND submitted_at=?`).bind(q.from.id, reviewer, now(), now(), telegramId, p.submitted_at).run();
+  if(Number(changed.meta?.changes||0)!==1){await answerCallback(env,q.id,'Profil allaqachon tekshirilgan');return true;}
   await clearLegacyIdentity(env, telegramId);
   await answerCallback(env, q.id, 'Profil qaytarildi');
   const user = await getUser(env, telegramId);
@@ -557,10 +568,12 @@ async function handleCallback(env,q,updateId) {
   const data=String(q.data||'');
 
   if(data.startsWith('v18admin:')){
+    if(!isPrivate(q.message?.chat)){await answerCallback(env,q.id,'Profil faqat adminning private chatida');return true;}
     if(!await claimUpdate(env,updateId)) return true;
-    const [,action,id]=data.split(':');
-    if(action==='approve') return approveProfile(env,q,id);
-    if(action==='reject') return rejectProfile(env,q,id);
+    const [,action,id,revision]=data.split(':');
+    if(!/^\d+$/.test(String(id||''))){await answerCallback(env,q.id,'Noto‘g‘ri ID');return true;}
+    if(action==='approve') return approveProfile(env,q,id,revision);
+    if(action==='reject') return rejectProfile(env,q,id,revision);
     if(action==='view') return adminView(env,q,id);
     return true;
   }
@@ -657,13 +670,13 @@ async function handleMessage(env,msg,updateId) {
     return showHome(env,msg.chat.id,user);
   }
 
-  if((isGroup(msg.chat)||isPrivate(msg.chat)) && /^\/profiles(?:@\w+)?$/i.test(text)){
+  if(isPrivate(msg.chat) && /^\/profiles(?:@\w+)?$/i.test(text)){
     if(!isAdmin(env,msg.from.id)) return false;
     if(!await claimUpdate(env,updateId)) return true;
     return listPending(env,msg);
   }
   const cm=text.match(/^\/client(?:@\w+)?\s+(\d+)$/i);
-  if((isGroup(msg.chat)||isPrivate(msg.chat)) && cm && isAdmin(env,msg.from.id)){
+  if(isPrivate(msg.chat) && cm && isAdmin(env,msg.from.id)){
     if(!await claimUpdate(env,updateId)) return true;
     return adminClientCommand(env,msg,cm[1]);
   }
