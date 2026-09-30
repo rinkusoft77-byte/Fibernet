@@ -20,3 +20,4 @@ jobs:
           node-version: 20
       - run: npm install --no-audit --no-fund
       - run: npm test
+      - run: npx wrangler deploy --dry-run --outdir dist
