@@ -76,8 +76,8 @@ function panelKeyboard() {
     [{ text:'🖼 Rasmlar', callback_data:'v23:media' }, { text:'✍️ Matnlar', callback_data:'v23:texts' }],
     [{ text:'🔗 Havolalar', callback_data:'v23:links' }, { text:'⏱ Support', callback_data:'v23:support' }],
     [{ text:'📢 Broadcast', callback_data:'v23:broadcast' }, { text:'👁 Preview', callback_data:'v23:preview' }],
-    [{ text:'🧰 Sistema', callback_data:'v23:system' }, { text:'📜 Audit', callback_data:'v23:audit' }],
-    [{ text:'⚙️ Override ro‘yxati', callback_data:'v23:settings' }]
+    [{ text:'🧰 Sistema', callback_data:'v23:system' }, { text:'🛡 Xavfsizlik', callback_data:'v25:security' }],
+    [{ text:'📜 Audit', callback_data:'v23:audit' }, { text:'⚙️ Override ro‘yxati', callback_data:'v23:settings' }]
   ]);
 }
 
