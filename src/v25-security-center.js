@@ -93,18 +93,18 @@ export async function preflightSecurity(env, update) {
   const actor = actorOf(update);
   if (!actor || isSecurityAdmin(env, actor.id)) return { blocked:false };
 
-  const manual = await env.DB.prepare(`SELECT reason,expires_at FROM fn25_blocks
+  const manual = await env.DB.prepare(`SELECT telegram_id,reason,expires_at FROM fn25_blocks
     WHERE telegram_id=? AND active=1
       AND (expires_at IS NULL OR datetime(expires_at)>datetime('now'))
     LIMIT 1`).bind(actor.id).first();
-  if (manual) {
+  if (Number(manual?.telegram_id) === actor.id) {
     return { blocked:true, reason:'manual_block' };
   }
 
-  const quarantine = await env.DB.prepare(`SELECT blocked_until,reason,strikes
+  const quarantine = await env.DB.prepare(`SELECT telegram_id,blocked_until,reason,strikes
     FROM fn25_quarantine WHERE telegram_id=?
       AND datetime(blocked_until)>datetime('now')`).bind(actor.id).first();
-  if (quarantine) {
+  if (Number(quarantine?.telegram_id) === actor.id) {
     return { blocked:true, reason:'quarantine' };
   }
 
