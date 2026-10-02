@@ -1,5 +1,6 @@
 import { __test as webhook } from './index-v10.js';
 import { isBotAdmin } from './v23-admin.js';
+import { preflightSecurity, recordFlood } from './v25-security-center.js';
 
 const MAX_WEBHOOK_BYTES = 512 * 1024;
 const RATE_WINDOW_SECONDS = 10;
@@ -153,7 +154,14 @@ export async function secureWebhook(request, env, ctx, delegate) {
     if (claim === 'busy') return reply('Retry', 503);
     claimed = true;
 
+    const security = await preflightSecurity(env, update);
+    if (security?.blocked) {
+      await finishUpdate(env, update.update_id, 200);
+      return reply('ok');
+    }
+
     if (await rateLimited(env, update)) {
+      await recordFlood(env, update).catch(() => {});
       await finishUpdate(env, update.update_id, 200);
       return reply('ok');
     }
