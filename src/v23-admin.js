@@ -69,8 +69,13 @@ async function safeAll(env, sql, binds = []) {
   catch { return []; }
 }
 
-function panelKeyboard() {
-  return inlineKeyboard([
+function panelKeyboard(env) {
+  const base=String(env.PUBLIC_BASE_URL||'').replace(/\/$/,'');
+  const rows=[];
+  if(/^https:\/\/[^/]+$/.test(base)) {
+    rows.push([{ text:'🌐 WEB ADMIN PANEL', web_app:{ url:base+'/admin' } }]);
+  }
+  rows.push(
     [{ text:'📊 Dashboard', callback_data:'v23:dashboard' }, { text:'🎫 Ticketlar', callback_data:'v23:tickets' }],
     [{ text:'👤 Profillar', callback_data:'v23:profiles' }, { text:'👨‍💻 Operatorlar', callback_data:'v23:operators' }],
     [{ text:'🖼 Rasmlar', callback_data:'v23:media' }, { text:'✍️ Matnlar', callback_data:'v23:texts' }],
@@ -78,7 +83,8 @@ function panelKeyboard() {
     [{ text:'📢 Broadcast', callback_data:'v23:broadcast' }, { text:'👁 Preview', callback_data:'v23:preview' }],
     [{ text:'🧰 Sistema', callback_data:'v23:system' }, { text:'🛡 Xavfsizlik', callback_data:'v25:security' }],
     [{ text:'📜 Audit', callback_data:'v23:audit' }, { text:'⚙️ Override ro‘yxati', callback_data:'v23:settings' }]
-  ]);
+  );
+  return inlineKeyboard(rows);
 }
 
 async function showPanel(env, chatId) {
@@ -96,7 +102,7 @@ async function showPanel(env, chatId) {
     '',
     'Bu panel faqat <b>ADMIN_IDS</b> dagi bot administratorlari uchun.',
     'Kontent o‘zgarishlari D1 da saqlanadi va kod deploy qilmasdan ishlaydi.'
-  ].join('\n'), { reply_markup:panelKeyboard() });
+  ].join('\n'), { reply_markup:panelKeyboard(env) });
 }
 
 async function showDashboard(env, chatId) {
